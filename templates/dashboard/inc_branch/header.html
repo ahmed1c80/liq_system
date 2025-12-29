@@ -1,0 +1,139 @@
+   <div class="bg-white rounded-xl shadow mb-6">
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div class="flex items-start md:items-center gap-4">
+                    <div class="bg-blue-100 p-4 rounded-xl">
+                        <i class="fas fa-university text-3xl text-blue-600"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-800 mb-1">{{ branch.name }}</h1>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded-full">
+                                <i class="fas fa-hashtag ml-1"></i>
+                                {{ branch.code }}
+                            </span>
+                            <span class="bg-gray-100 text-gray-800 text-sm px-3 py-1 rounded-full">
+                                <i class="fas fa-map-marker-alt ml-1"></i>
+                                {{ branch.location }}
+                            </span>
+                            <span class="bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full">
+                                <i class="fas fa-calendar-alt ml-1"></i>
+                                ساعات العمل: ٨ص - ٤م
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <button onclick="history.back()" 
+                            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center">
+                        <i class="fas fa-arrow-right ml-2"></i>
+                        رجوع
+                    </button>
+                    
+                    {% if user_role in ['admin', 'manager'] %}
+                    <button onclick="showTransferModal({{ branch.id }})"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                        <i class="fas fa-exchange-alt ml-2"></i>
+                        تحويل أموال
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Branch Stats -->
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <!-- Current Liquidity -->
+        
+                <div class="stat-card p-5 rounded-xl border border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <p class="text-gray-500 text-sm mb-1">السيولة الحالية</p>
+                            <h3 class="text-2xl font-bold 
+                                {% if recent_record and recent_record.current_liquidity < branch.min_liquidity %}text-red-600
+                                {% elif recent_record and recent_record.current_liquidity < branch.min_liquidity * 1.2 %}text-yellow-600
+                                {% else %}text-green-600{% endif %}">
+                                {{ "%.2f"|format(recent_record.current_liquidity if recent_record else 0) }} ر.ي
+                            </h3>
+                        </div>
+                        <div class="bg-blue-100 p-3 rounded-lg">
+                            <i class="fas fa-coins text-blue-600 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        <span>آخر تحديث: {{ recent_record.timestamp.strftime('%H:%M') if recent_record else '--:--' }}</span>
+                    </div>
+                </div>
+                
+                <!-- Minimum Required -->
+                <div class="stat-card p-5 rounded-xl border border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <p class="text-gray-500 text-sm mb-1">الحد الأدنى المطلوب</p>
+                            <h3 class="text-2xl font-bold text-gray-700">
+                                {{ "%.2f"|format(branch.min_liquidity) }} ر.ي
+                            </h3>
+                        </div>
+                        <div class="bg-yellow-100 p-3 rounded-lg">
+                            <i class="fas fa-exclamation-circle text-yellow-600 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        <span>لضمان التشغيل اليومي</span>
+                    </div>
+                </div>
+                
+                <!-- Maximum Capacity -->
+                <div class="stat-card p-5 rounded-xl border border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <p class="text-gray-500 text-sm mb-1">السعة القصوى</p>
+                            <h3 class="text-2xl font-bold text-gray-700">
+                                {{ "%.2f"|format(branch.max_liquidity) }} ر.ي
+                            </h3>
+                        </div>
+                        <div class="bg-green-100 p-3 rounded-lg">
+                            <i class="fas fa-chart-line text-green-600 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        <span>أقصى سعة تخزين</span>
+                    </div>
+                </div>
+                
+                <!-- Utilization Rate -->
+                <div class="stat-card p-5 rounded-xl border border-gray-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <p class="text-gray-500 text-sm mb-1">معدل الاستخدام</p>
+                            <h3 class="text-2xl font-bold 
+                                {% set utilization = ((recent_record.current_liquidity if recent_record else 0) / branch.max_liquidity * 100) if branch.max_liquidity > 0 else 0 %}
+                                {% if utilization > 80 %}text-red-600
+                                {% elif utilization > 60 %}text-yellow-600
+                                {% else %}text-green-600{% endif %}">
+                                {{ "%.1f"|format(utilization) }}%
+                            </h3>
+                        </div>
+                        <div class="bg-purple-100 p-3 rounded-lg">
+                            <i class="fas fa-percentage text-purple-600 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="h-2 rounded-full 
+                                {% if utilization > 80 %}bg-red-500
+                                {% elif utilization > 60 %}bg-yellow-500
+                                {% else %}bg-green-500{% endif %}" 
+                                style="width:  {% if utilization > 100 %}100{% else %}{{ utilization }}{% endif %}%">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Liquidity Progress -->
+              {% include 'dashboard/inc_branch/progress.html'%}
+        </div>
+    </div>

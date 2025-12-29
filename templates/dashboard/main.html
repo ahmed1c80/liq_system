@@ -1,0 +1,969 @@
+{% extends "base.html" %}
+
+{% block title %}لوحة التحكم{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Custom styles for dashboard */
+    .stat-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    }
+    
+    .liquidity-progress {
+        height: 8px;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.5s ease-in-out;
+    }
+    
+    .branch-card {
+        transition: all 0.3s ease;
+    }
+    
+    .branch-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    }
+    
+    /* Animation for loading */
+    @keyframes shimmer {
+        0% {
+            background-position: -1000px 0;
+        }
+        100% {
+            background-position: 1000px 0;
+        }
+    }
+    
+    .shimmer {
+        background: linear-gradient(to right, #f6f7f8 4%, #edeef1 25%, #f6f7f8 36%);
+        background-size: 1000px 100%;
+        animation: shimmer 2s infinite linear;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate__animated animate__fadeIn">
+    <!-- Page Header -->
+    <div class="mb-6 md:mb-8">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-2">لوحة تحكم السيولة</h1>
+                <p class="text-gray-600">مراقبة وتنبؤ السيولة بشكل لحظي • تحديث تلقائي كل 30 ثانية</p>
+            </div>
+            
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <button onclick="refreshDashboard()" 
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                    <i class="fas fa-sync-alt ml-2"></i>
+                    <span class="hidden sm:inline">تحديث</span>
+                </button>
+                
+                <button onclick="showSettings()" 
+                        class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center">
+                    <i class="fas fa-cog ml-2"></i>
+                    <span class="hidden sm:inline">إعدادات</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Real-time indicator -->
+        <div class="mt-4 flex items-center text-sm text-gray-500">
+            <div class="w-2 h-2 bg-green-500 rounded-full ml-2 animate-pulse"></div>
+            <span>متصل - تحديث لحظي</span>
+            <span class="mr-4 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">WebSocket</span>
+        </div>
+    </div>
+    
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
+        <!-- Total Liquidity -->
+        <div class="stat-card rounded-xl shadow p-5 card-hover">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">إجمالي السيولة</p>
+                    <h3 class="text-2xl font-bold text-green-600" id="total-liquidity">
+                        {% set total_liquidity = [] %}
+                        {% for branch in branches %}
+                            {% if total_liquidity.append(branch.current_liquidity) %}{% endif %}
+                        {% endfor %}
+                        {{ "%.2f"|format(total_liquidity|sum) }} ر.ي
+                    </h3>
+                </div>
+                <div class="bg-green-100 p-3 rounded-lg">
+                    <i class="fas fa-coins text-2xl text-green-600"></i>
+                </div>
+            </div>
+            <div class="text-sm text-gray-600">
+                <span class="text-green-500 font-semibold">▲ 2.5%</span> عن الأسبوع الماضي
+            </div>
+        </div>
+        
+        <!-- Active Branches -->
+        <div class="stat-card rounded-xl shadow p-5 card-hover">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">الفروع النشطة</p>
+                    <h3 class="text-2xl font-bold text-blue-600">{{ branches|length }}</h3>
+                </div>
+                <div class="bg-blue-100 p-3 rounded-lg">
+                    <i class="fas fa-code-branch text-2xl text-blue-600"></i>
+                </div>
+            </div>
+            <div class="text-sm text-gray-600">
+                جميع الفروع متصلة بالنظام
+            </div>
+        </div>
+        
+        <!-- Active Alerts -->
+        <div class="stat-card rounded-xl shadow p-5 card-hover">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">التنبيهات النشطة</p>
+                    <h3 class="text-2xl font-bold text-red-600" id="active-alerts">
+                        {% set total_alerts = [] %}
+                        {% for branch in branches %}
+                            {% if total_alerts.append(branch.alerts|length) %}{% endif %}
+                        {% endfor %}
+                        {{ total_alerts|sum }}
+                    </h3>
+                </div>
+                <div class="bg-red-100 p-3 rounded-lg">
+                    <i class="fas fa-exclamation-triangle text-2xl text-red-600"></i>
+                </div>
+            </div>
+            <div class="text-sm text-gray-600">
+                {% if total_alerts|sum > 0 %}
+                    <span class="text-red-500 font-semibold">يحتاج إلى مراجعة</span>
+                {% else %}
+                    <span class="text-green-500 font-semibold">جميع الأنظمة طبيعية</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- System Status -->
+        <div class="stat-card rounded-xl shadow p-5 card-hover">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">حالة النظام</p>
+                    <h3 class="text-2xl font-bold {% if total_alerts|sum > 0 %}text-yellow-600{% else %}text-green-600{% endif %}">
+                        {% if total_alerts|sum > 0 %}تحذير{% else %}مستقر{% endif %}
+                    </h3>
+                </div>
+                <div class="{% if total_alerts|sum > 0 %}bg-yellow-100{% else %}bg-green-100{% endif %} p-3 rounded-lg">
+                    <i class="fas fa-{% if total_alerts|sum > 0 %}exclamation-circle{% else %}check-circle{% endif %} text-2xl {% if total_alerts|sum > 0 %}text-yellow-600{% else %}text-green-600{% endif %}"></i>
+                </div>
+            </div>
+            <div class="text-sm text-gray-600">
+                تحديث:  <span id="current-time"></span>
+            </div>
+        </div>
+    </div>
+    <script>
+// 更新当前时间
+function updateTime() {
+    const now = new Date();
+    const timeString = now.getHours().toString().padStart(2, '0') + ':' + 
+                      now.getMinutes().toString().padStart(2, '0');
+    document.getElementById('current-time').textContent = timeString;
+}
+
+// 初始更新
+updateTime();
+// 每分钟更新一次
+setInterval(updateTime, 60000);
+</script>
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Branches List -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-xl shadow overflow-hidden">
+                <div class="p-5 md:p-6 border-b border-gray-200">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <h2 class="text-xl font-bold text-gray-800">الفروع والسيولة</h2>
+                        
+                        <div class="flex items-center space-x-3 space-x-reverse">
+                            <div class="relative">
+                                <input type="text" 
+                                       placeholder="ابحث عن فرع..." 
+                                       class="pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-48"
+                                       id="search-branches">
+                                <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
+                            </div>
+                            
+                            <select class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    id="sort-branches">
+                                <option value="name">الاسم من أ إلى ي</option>
+                                <option value="liquidity_asc">السيولة من الأقل للأعلى</option>
+                                <option value="liquidity_desc">السيولة من الأعلى للأقل</option>
+                                <option value="alerts">حسب التنبيهات</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="py-4 px-4 md:px-6 text-right font-semibold text-gray-700">الفرع</th>
+                                <th class="py-4 px-4 md:px-6 text-right font-semibold text-gray-700">السيولة</th>
+                                <th class="py-4 px-4 md:px-6 text-right font-semibold text-gray-700 hidden md:table-cell">المستوى</th>
+                                <th class="py-4 px-4 md:px-6 text-right font-semibold text-gray-700">الحالة</th>
+                                <th class="py-4 px-4 md:px-6 text-right font-semibold text-gray-700">الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="branches-table-body">
+                            {% for branch in branches %}
+                            <tr class="border-b hover:bg-gray-50 transition-colors branch-card" 
+                                data-branch-id="{{ branch.id }}" 
+                                data-min-liquidity="{{ branch.min_liquidity }}"
+                                data-name="{{ branch.name }}"
+                                data-liquidity="{{ branch.current_liquidity }}"
+                                data-alerts="{{ branch.alerts|length }}">
+                                <td class="py-4 px-4 md:px-6">
+                                    <div class="flex items-center">
+                                        <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center ml-4">
+                                            <i class="fas fa-university text-blue-600"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-semibold text-gray-800">{{ branch.name }}</p>
+                                            <div class="flex items-center mt-1">
+                                                <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{{ branch.code }}</span>
+                                                <span class="text-xs text-gray-500 mr-2 hidden sm:inline">• {{ branch.location }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                
+                                <td class="py-4 px-4 md:px-6">
+                                    <div>
+                                        <p class="current-liquidity font-bold text-lg 
+                                            {% if branch.current_liquidity < branch.min_liquidity %}text-red-600
+                                            {% elif branch.current_liquidity < branch.min_liquidity * 1.2 %}text-yellow-600
+                                            {% else %}text-green-600{% endif %}">
+                                            {{ "%.2f"|format(branch.current_liquidity) }} ر.ي
+                                        </p>
+                                        <div class="flex items-center mt-1 text-sm text-gray-600">
+                                            <span class="text-xs">الحد الأدنى: {{ "%.2f"|format(branch.min_liquidity) }} ر.ي</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                
+                                <td class="py-4 px-4 md:px-6 hidden md:table-cell">
+                                    <div class="w-32">
+                                        {% set percentage = (branch.current_liquidity / branch.max_liquidity * 100) if branch.max_liquidity > 0 else 0 %}
+                                        <div class="liquidity-progress bg-gray-200">
+                                            <div class="progress-fill 
+                                                {% if percentage < 30 %}bg-red-500
+                                                {% elif percentage < 60 %}bg-yellow-500
+                                                {% else %}bg-green-500{% endif %}" 
+                                                style="width: {% if percentage > 100 %}100{% else %}{{ percentage }}{% endif %}%">
+                                            </div>
+                                        </div>
+                                        <div class="flex justify-between text-xs text-gray-600 mt-1">
+                                            <span>0%</span>
+                                            <span>{{ percentage|int }}%</span>
+                                            <span>100%</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                
+                                <td class="py-4 px-4 md:px-6">
+                                    {% if branch.alerts and branch.alerts|length > 0 %}
+                                        <div class="inline-flex flex-col">
+                                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                                                <i class="fas fa-exclamation-circle ml-1"></i>
+                                                تحذير
+                                            </span>
+                                            <span class="text-xs text-red-600 mt-1">{{ branch.alerts|length }} تنبيه</span>
+                                        </div>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                                            <i class="fas fa-check-circle ml-1"></i>
+                                            طبيعي
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="py-4 px-4 md:px-6">
+                                    <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                                        <button onclick="viewBranchDetails({{ branch.id }})" 
+                                                class="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-lg transition-colors"
+                                                title="عرض التفاصيل">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        
+                                        {% if user_role in ['admin', 'manager'] %}
+                                        <button onclick="showTransferModal({{ branch.id }})"
+                                                class="text-green-600 hover:text-green-800 p-2 hover:bg-green-50 rounded-lg transition-colors"
+                                                title="تحويل أموال">
+                                            <i class="fas fa-exchange-alt"></i>
+                                        </button>
+                                        {% endif %}
+                                        
+                                        <button onclick="showForecast({{ branch.id }})"
+                                                class="text-purple-600 hover:text-purple-800 p-2 hover:bg-purple-50 rounded-lg transition-colors"
+                                                title="التنبؤات">
+                                            <i class="fas fa-chart-line"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="py-12 text-center text-gray-500">
+                                    <i class="fas fa-inbox text-4xl mb-4 text-gray-300"></i>
+                                    <p>لا توجد فروع متاحة</p>
+                                    <p class="text-sm mt-2">يرجى إضافة فروع جديدة</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Mobile Cards View -->
+                <div class="md:hidden p-4">
+                    {% for branch in branches %}
+                    <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm branch-card"
+                         data-branch-id="{{ branch.id }}">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 class="font-bold text-gray-800">{{ branch.name }}</h3>
+                                <p class="text-sm text-gray-600">{{ branch.code }} • {{ branch.location }}</p>
+                            </div>
+                            {% if branch.alerts and branch.alerts|length > 0 %}
+                                <span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
+                                    {{ branch.alerts|length }} تنبيه
+                                </span>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-gray-600 text-sm">السيولة الحالية</span>
+                                <span class="font-bold {% if branch.current_liquidity < branch.min_liquidity %}text-red-600{% else %}text-green-600{% endif %}">
+                                    {{ "%.2f"|format(branch.current_liquidity) }} ر.ي
+                                </span>
+                            </div>
+                            <div class="liquidity-progress bg-gray-200">
+                                {% set percentage = (branch.current_liquidity / branch.max_liquidity * 100) if branch.max_liquidity > 0 else 0 %}
+                                <div class="progress-fill 
+                                    {% if percentage < 30 %}bg-red-500
+                                    {% elif percentage < 60 %}bg-yellow-500
+                                    {% else %}bg-green-500{% endif %}" 
+                                    style="width: {% if percentage > 100 %}100{% else %}{{ percentage }}{% endif %}%">
+                                </div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                <span>0 ر.ي</span>
+                                <span>الحد: {{ "%.2f"|format(branch.min_liquidity) }} ر.ي</span>
+                                <span>{{ "%.2f"|format(branch.max_liquidity) }} ر.ي</span>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between border-t pt-3">
+                            <button onclick="viewBranchDetails({{ branch.id }})" 
+                                    class="text-blue-600 text-sm flex items-center">
+                                <i class="fas fa-eye ml-1"></i> التفاصيل
+                            </button>
+                            
+                            {% if user_role in ['admin', 'manager'] %}
+                            <button onclick="showTransferModal({{ branch.id }})"
+                                    class="text-green-600 text-sm flex items-center">
+                                <i class="fas fa-exchange-alt ml-1"></i> تحويل
+                            </button>
+                            {% endif %}
+                            
+                            <button onclick="showForecast({{ branch.id }})"
+                                    class="text-purple-600 text-sm flex items-center">
+                                <i class="fas fa-chart-line ml-1"></i> تنبؤ
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Sidebar -->
+        <div class="space-y-6">
+            <!-- Quick Actions -->
+            <div class="bg-white rounded-xl shadow p-5">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">إجراءات سريعة</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    {% if user_role in ['admin', 'manager'] %}
+                    <button onclick="showTransferModal()"
+                            class="p-4 bg-blue-50 hover:bg-blue-100 rounded-lg text-center border border-blue-200 transition-all hover:shadow-md">
+                        <i class="fas fa-exchange-alt text-blue-600 text-xl mb-2"></i>
+                        <p class="font-semibold text-sm">تحويل أموال</p>
+                    </button>
+                    {% endif %}
+                    
+                    <button onclick="generateReport()"
+                            class="p-4 bg-green-50 hover:bg-green-100 rounded-lg text-center border border-green-200 transition-all hover:shadow-md">
+                        <i class="fas fa-file-pdf text-green-600 text-xl mb-2"></i>
+                        <p class="font-semibold text-sm">تقرير يومي</p>
+                    </button>
+                    
+                    <button onclick="showPredictions()"
+                            class="p-4 bg-purple-50 hover:bg-purple-100 rounded-lg text-center border border-purple-200 transition-all hover:shadow-md">
+                        <i class="fas fa-brain text-purple-600 text-xl mb-2"></i>
+                        <p class="font-semibold text-sm">التنبؤات</p>
+                    </button>
+                    
+                    <button onclick="showSettings()"
+                            class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg text-center border border-gray-200 transition-all hover:shadow-md">
+                        <i class="fas fa-cog text-gray-600 text-xl mb-2"></i>
+                        <p class="font-semibold text-sm">الإعدادات</p>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Recent Alerts -->
+            <div class="bg-white rounded-xl shadow p-5">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-gray-800">آخر التنبيهات</h3>
+                    <button onclick="refreshAlerts()" class="text-blue-600 hover:text-blue-800">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                
+                <div id="alerts-container" class="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
+                    {% set has_alerts = false %}
+                    {% for branch in branches if branch.alerts and branch.alerts|length > 0 %}
+                        {% set has_alerts = true %}
+                        {% for alert in branch.alerts|slice(3) %}
+                        <div class="p-3 rounded-lg border-r-4 {% if alert.severity == 'high' %}border-red-500 bg-red-50{% else %}border-yellow-500 bg-yellow-50{% endif %}">
+                            <div class="flex items-start">
+                                <div class="ml-3">
+                                    <i class="fas fa-exclamation-circle {% if alert.severity == 'high' %}text-red-500{% else %}text-yellow-500{% endif %}"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-start">
+                                        <h4 class="font-semibold text-sm text-gray-800">{{ branch.name }}</h4>
+                                        <span class="text-xs text-gray-500">الآن</span>
+                                    </div>
+                                    <p class="text-sm text-gray-700 mt-1">{{ alert.message }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% endfor %}
+                    
+                    {% if not has_alerts %}
+                    <div class="text-center py-6 text-gray-500">
+                        <i class="fas fa-check-circle text-3xl mb-3 text-green-400"></i>
+                        <p class="text-sm">لا توجد تنبيهات نشطة</p>
+                        <p class="text-xs mt-1">جميع الأنظمة تعمل بشكل طبيعي</p>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if has_alerts %}
+                <div class="mt-4 pt-4 border-t">
+                    <a href="#" class="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center justify-center">
+                        <span>عرض جميع التنبيهات</span>
+                        <i class="fas fa-arrow-left ml-2"></i>
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Basel III Compliance -->
+            <div class="bg-gradient-to-r from-blue-900 to-blue-800 text-white rounded-xl shadow p-5">
+                <div class="flex items-center mb-4">
+                    <div class="bg-white bg-opacity-20 p-3 rounded-lg ml-4">
+                        <i class="fas fa-shield-check text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold">معايير Basel III</h3>
+                        <p class="text-blue-200 text-sm opacity-90">نسبة التوافق</p>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>نسبة السيولة (LCR)</span>
+                        <span class="font-bold">125%</span>
+                    </div>
+                    <div class="w-full bg-blue-700 rounded-full h-2">
+                        <div class="bg-green-400 h-2 rounded-full" style="width: 100%"></div>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>صافي تمويل مستقر (NSFR)</span>
+                        <span class="font-bold">110%</span>
+                    </div>
+                    <div class="w-full bg-blue-700 rounded-full h-2">
+                        <div class="bg-green-400 h-2 rounded-full" style="width: 100%"></div>
+                    </div>
+                </div>
+                
+                <div class="text-center mt-6">
+                    <p class="text-xs text-blue-200 opacity-80">آخر تحديث:  <span id="current-time"></span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Skeleton -->
+    <div id="loading-skeleton" class="hidden">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {% for i in range(4) %}
+            <div class="bg-white rounded-xl shadow p-5">
+                <div class="animate-pulse">
+                    <div class="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+                    <div class="h-8 bg-gray-200 rounded w-3/4 mb-4"></div>
+                    <div class="h-3 bg-gray-200 rounded w-1/3"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Transfer Modal -->
+<div id="transfer-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate__animated animate__zoomIn">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800">تحويل أموال</h3>
+                <button onclick="closeTransferModal()" 
+                        class="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <form id="transfer-form">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">من الفرع</label>
+                        <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" 
+                                name="from_branch" required>
+                            <option value="">اختر الفرع المصدر</option>
+                            {% for branch in branches %}
+                            <option value="{{ branch.id }}">{{ branch.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">إلى الفرع</label>
+                        <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" 
+                                name="to_branch" required>
+                            <option value="">اختر الفرع المستلم</option>
+                            {% for branch in branches %}
+                            <option value="{{ branch.id }}">{{ branch.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">المبلغ (ر.ي)</label>
+                        <div class="relative">
+                            <input type="number" step="0.01" min="0" 
+                                   class="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" 
+                                   name="amount" required placeholder="0.00">
+                            <span class="absolute left-3 top-3 text-gray-500">ر.ي</span>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <div class="flex items-center text-sm text-blue-700">
+                            <i class="fas fa-info-circle ml-2"></i>
+                            <span>سيتم خصم 0.5% كرسوم نظام</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 space-x-reverse mt-6">
+                    <button type="button" onclick="closeTransferModal()"
+                            class="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                        إلغاء
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center">
+                        <span>تأكيد التحويل</span>
+                        <i class="fas fa-arrow-left ml-2"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Forecast Modal -->
+<div id="forecast-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg animate__animated animate__zoomIn">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800">التنبؤات الذكية</h3>
+                <button onclick="closeForecastModal()" 
+                        class="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <div id="forecast-content">
+                <!-- Forecast content will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Dashboard functionality
+    let branchesData = {{ branches|tojson|safe }};
+    
+    // Refresh dashboard
+    function refreshDashboard() {
+        const refreshBtn = event?.target || document.querySelector('button[onclick="refreshDashboard()"]');
+        if (refreshBtn) {
+            const originalHTML = refreshBtn.innerHTML;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+            refreshBtn.disabled = true;
+            
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        }
+    }
+    
+    // Search branches
+    document.getElementById('search-branches')?.addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        const rows = document.querySelectorAll('#branches-table-body tr');
+        
+        rows.forEach(row => {
+            const branchName = row.dataset.name?.toLowerCase() || '';
+            if (branchName.includes(searchTerm)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    });
+    
+    // Sort branches
+    document.getElementById('sort-branches')?.addEventListener('change', function(e) {
+        const sortBy = e.target.value;
+        const tbody = document.getElementById('branches-table-body');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        
+        rows.sort((a, b) => {
+            switch(sortBy) {
+                case 'name':
+                    return a.dataset.name?.localeCompare(b.dataset.name || '') || 0;
+                case 'liquidity_asc':
+                    return (parseFloat(a.dataset.liquidity) || 0) - (parseFloat(b.dataset.liquidity) || 0);
+                case 'liquidity_desc':
+                    return (parseFloat(b.dataset.liquidity) || 0) - (parseFloat(a.dataset.liquidity) || 0);
+                case 'alerts':
+                    return (parseInt(b.dataset.alerts) || 0) - (parseInt(a.dataset.alerts) || 0);
+                default:
+                    return 0;
+            }
+        });
+        
+        // Reorder rows
+        rows.forEach(row => tbody.appendChild(row));
+    });
+    
+    // View branch details
+    function viewBranchDetails(branchId) {
+        window.location.href = `/branch/${branchId}`;
+    }
+    
+    // Show forecast
+    async function showForecast(branchId) {
+        try {
+            const response = await fetch(`/api/predict/${branchId}`);
+            const data = await response.json();
+            
+            if (data.predictions) {
+                const modal = document.getElementById('forecast-modal');
+                const content = document.getElementById('forecast-content');
+                
+                let html = `
+                    <div class="mb-6">
+                        <h4 class="font-bold text-lg text-gray-800 mb-4">التنبؤات للـ7 أيام القادمة</h4>
+                        <div class="space-y-4">
+                `;
+                
+                data.predictions.forEach((pred, index) => {
+                    const date = data.dates ? data.dates[index] : `اليوم ${index + 1}`;
+                    const historical = data.historical?.[index] || 0;
+                    const change = historical ? ((pred - historical) / historical * 100).toFixed(1) : 0;
+                    const changeClass = change >= 0 ? 'text-green-600' : 'text-red-600';
+                    const changeIcon = change >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
+                    
+                    html += `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div>
+                                <p class="font-medium text-gray-800">${date}</p>
+                                <p class="text-sm text-gray-600">${historical.toFixed(2)} ر.ي (الفعلية)</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-lg">${pred.toFixed(2)} ر.ي</p>
+                                <p class="text-sm ${changeClass}">
+                                    <i class="fas ${changeIcon} ml-1"></i>
+                                    ${Math.abs(change)}%
+                                </p>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                        </div>
+                        <div class="mt-6 p-4 bg-blue-50 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-robot text-blue-600 ml-3 text-xl"></i>
+                                <div>
+                                    <p class="font-medium text-blue-800">نموذج الذكاء الاصطناعي</p>
+                                    <p class="text-sm text-blue-600">يستخدم خوارزمية الانحدار الخطي للتنبؤ</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <button onclick="closeForecastModal()"
+                                class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
+                            تم
+                        </button>
+                    </div>
+                `;
+                
+                content.innerHTML = html;
+                modal.classList.remove('hidden');
+            } else if (data.error) {
+                alert(data.error);
+            }
+        } catch (error) {
+            console.error('Error fetching forecast:', error);
+            alert('خطأ في جلب التنبؤات');
+        }
+    }
+    
+    function closeForecastModal() {
+        document.getElementById('forecast-modal').classList.add('hidden');
+    }
+    
+    // Transfer functions
+    let transferSourceBranch = null;
+    
+    window.showTransferModal = function(branchId = null) {
+        const modal = document.getElementById('transfer-modal');
+        const fromSelect = modal.querySelector('select[name="from_branch"]');
+        
+        if (branchId) {
+            fromSelect.value = branchId;
+            transferSourceBranch = branchId;
+            
+            // Disable the selected branch in "to" dropdown
+            const toSelect = modal.querySelector('select[name="to_branch"]');
+            Array.from(toSelect.options).forEach(option => {
+                if (option.value == branchId) {
+                    option.disabled = true;
+                } else {
+                    option.disabled = false;
+                }
+            });
+        }
+        
+        modal.classList.remove('hidden');
+    };
+    
+    function closeTransferModal() {
+        document.getElementById('transfer-modal').classList.add('hidden');
+        document.getElementById('transfer-form').reset();
+        transferSourceBranch = null;
+    }
+    
+    // Handle transfer form submission
+    document.getElementById('transfer-form')?.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            from_branch: parseInt(this.from_branch.value),
+            to_branch: parseInt(this.to_branch.value),
+            amount: parseFloat(this.amount.value)
+        };
+        
+        // Validation
+        if (!formData.from_branch || !formData.to_branch) {
+            alert('يرجى اختيار الفروع');
+            return;
+        }
+        
+        if (formData.from_branch === formData.to_branch) {
+            alert('لا يمكن التحويل لنفس الفرع');
+            return;
+        }
+        
+        if (!formData.amount || formData.amount <= 0) {
+            alert('يرجى إدخال مبلغ صحيح');
+            return;
+        }
+        
+        // Show loading
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await fetch('/api/transfer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                alert('✅ تم التحويل بنجاح');
+                closeTransferModal();
+                
+                // Refresh after delay
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                alert(result.error || 'حدث خطأ أثناء التحويل');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('خطأ في الاتصال بالخادم');
+        } finally {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+    
+    // Close modals when clicking outside
+    document.getElementById('transfer-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeTransferModal();
+        }
+    });
+    
+    document.getElementById('forecast-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeForecastModal();
+        }
+    });
+    
+    // Generate report
+    function generateReport() {
+        // Show loading
+        const btn = event?.target?.closest('button') || event?.target;
+        if (btn) {
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الإنشاء...';
+            btn.disabled = true;
+            
+            // Simulate report generation
+            setTimeout(() => {
+                // Create download link
+                const link = document.createElement('a');
+                link.href = '#';
+                link.download = `تقرير_السيولة_${new Date().toISOString().split('T')[0]}.pdf`;
+                link.click();
+                
+                // Restore button
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                
+                // Show success message
+                alert('✅ تم إنشاء التقرير بنجاح');
+            }, 2000);
+        }
+    }
+    
+    // Show predictions for all branches
+    function showPredictions() {
+        if (branchesData.length > 0) {
+            showForecast(branchesData[0].id);
+        } else {
+            alert('لا توجد فروع لعرض التنبؤات');
+        }
+    }
+    
+    // Refresh alerts
+    function refreshAlerts() {
+        const container = document.getElementById('alerts-container');
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center py-8">
+                    <div class="loader mx-auto"></div>
+                    <p class="mt-4 text-gray-600 text-sm">جاري تحديث التنبيهات...</p>
+                </div>
+            `;
+            
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        }
+    }
+    
+    // Settings
+    function showSettings() {
+        alert('صفحة الإعدادات قريباً');
+    }
+    
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add click listeners for mobile cards
+        document.querySelectorAll('.branch-card').forEach(card => {
+            card.addEventListener('click', function(e) {
+                // Only trigger if not clicking on buttons
+                if (!e.target.closest('button')) {
+                    const branchId = this.dataset.branchId;
+                    if (branchId) {
+                        viewBranchDetails(branchId);
+                    }
+                }
+            });
+        });
+        
+        // Initialize tooltips
+        document.querySelectorAll('[title]').forEach(el => {
+            el.addEventListener('mouseenter', function() {
+                const tooltip = document.createElement('div');
+                tooltip.className = 'fixed bg-gray-900 text-white text-sm px-2 py-1 rounded z-50';
+                tooltip.textContent = this.title;
+                document.body.appendChild(tooltip);
+                
+                const rect = this.getBoundingClientRect();
+                tooltip.style.top = (rect.top - 30) + 'px';
+                tooltip.style.right = (window.innerWidth - rect.right) + 'px';
+                
+                this._tooltip = tooltip;
+            });
+            
+            el.addEventListener('mouseleave', function() {
+                if (this._tooltip) {
+                    this._tooltip.remove();
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,1266 @@
+{% extends "base.html" %}
+
+{% block title %}إدارة السيولة{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    }
+    
+    .amount-input {
+        font-size: 1.5rem;
+        font-weight: bold;
+        text-align: left;
+        direction: ltr;
+    }
+    
+    .operation-btn {
+        transition: all 0.2s ease;
+    }
+    
+    .operation-btn.active {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+    }
+    
+    .branch-card {
+        transition: all 0.3s ease;
+    }
+    
+    .branch-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .history-item {
+        position: relative;
+        padding-right: 1.5rem;
+    }
+    
+    .history-item::before {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e5e7eb;
+    }
+    
+    .history-item:last-child::before {
+        display: none;
+    }
+    
+    .history-dot {
+        position: absolute;
+        right: -0.5rem;
+        top: 1.5rem;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        border: 3px solid white;
+        z-index: 1;
+    }
+    
+    .positive-amount {
+        color: #10b981;
+        background: rgba(16, 185, 129, 0.1);
+    }
+    
+    .negative-amount {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.1);
+    }
+    
+    .neutral-amount {
+        color: #6b7280;
+        background: rgba(107, 114, 128, 0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate__animated animate__fadeIn">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-2">إدارة السيولة</h1>
+                <p class="text-gray-600">إضافة، سحب، أو تعديل السيولة النقدية للفروع</p>
+            </div>
+            
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <button onclick="showAddBranchModal()"
+                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center">
+                    <i class="fas fa-plus ml-2"></i>
+                    فرع جديد
+                </button>
+                
+                <button onclick="showBulkUpdateModal()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                    <i class="fas fa-file-import ml-2"></i>
+                    تحديث جماعي
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column: Liquidity Management Form -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-xl shadow mb-6">
+                <div class="p-6 border-b">
+                    <h2 class="text-xl font-bold text-gray-800">إدارة السيولة</h2>
+                    <p class="text-gray-600 text-sm mt-1">أضف أو سحب أو عدّل السيولة لأي فرع</p>
+                </div>
+                
+                <div class="p-6">
+                    <!-- Operation Type Selection -->
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">نوع العملية</h3>
+                        <div class="grid grid-cols-3 gap-3">
+                            <button id="operation-add" 
+                                    class="operation-btn active p-4 bg-green-50 border-2 border-green-500 rounded-xl flex flex-col items-center justify-center"
+                                    onclick="setOperation('add')">
+                                <i class="fas fa-plus-circle text-green-600 text-2xl mb-2"></i>
+                                <span class="font-semibold text-green-700">إضافة سيولة</span>
+                                <span class="text-sm text-green-600 mt-1">زيادة الرصيد</span>
+                            </button>
+                            
+                            <button id="operation-withdraw" 
+                                    class="operation-btn p-4 bg-red-50 border-2 border-gray-200 rounded-xl flex flex-col items-center justify-center hover:border-red-300"
+                                    onclick="setOperation('withdraw')">
+                                <i class="fas fa-minus-circle text-red-600 text-2xl mb-2"></i>
+                                <span class="font-semibold text-red-700">سحب سيولة</span>
+                                <span class="text-sm text-red-600 mt-1">تقليل الرصيد</span>
+                            </button>
+                            
+                            <button id="operation-set" 
+                                    class="operation-btn p-4 bg-blue-50 border-2 border-gray-200 rounded-xl flex flex-col items-center justify-center hover:border-blue-300"
+                                    onclick="setOperation('set')">
+                                <i class="fas fa-exchange-alt text-blue-600 text-2xl mb-2"></i>
+                                <span class="font-semibold text-blue-700">تعديل مباشر</span>
+                                <span class="text-sm text-blue-600 mt-1">تعيين قيمة محددة</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Branch Selection -->
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">اختر الفرع</h3>
+                        <div id="branches-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Branches will be loaded here -->
+                            <div class="text-center py-8">
+                                <div class="loader mx-auto"></div>
+                                <p class="mt-4 text-gray-600">جاري تحميل الفروع...</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Amount Input -->
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">المبلغ</h3>
+                        <div class="bg-gray-50 p-6 rounded-xl">
+                            <div class="mb-4">
+                                <label class="block text-gray-700 mb-2 font-medium">القيمة (ر.ي)</label>
+                                <div class="relative">
+                                    <input type="number" 
+                                           step="0.01" 
+                                           min="0"
+                                           id="amount-input"
+                                           class="w-full p-4 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition amount-input"
+                                           placeholder="0.00">
+                                    <span class="absolute left-4 top-4 text-gray-500 text-lg">ر.ي</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Quick Amount Buttons -->
+                            <div class="mb-4">
+                                <p class="text-gray-600 text-sm mb-3">مبالغ سريعة:</p>
+                                <div class="grid grid-cols-4 gap-2">
+                                    <button onclick="setAmount(100000)" 
+                                            class="py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                                        100,000
+                                    </button>
+                                    <button onclick="setAmount(500000)" 
+                                            class="py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                                        500,000
+                                    </button>
+                                    <button onclick="setAmount(1000000)" 
+                                            class="py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                                        1,000,000
+                                    </button>
+                                    <button onclick="setAmount(5000000)" 
+                                            class="py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                                        5,000,000
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Description -->
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">الوصف (اختياري)</label>
+                                <textarea id="description-input"
+                                          class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                          rows="2"
+                                          placeholder="أدخل وصفًا للعملية..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Summary -->
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">ملخص العملية</h3>
+                        <div class="bg-blue-50 p-6 rounded-xl border border-blue-200">
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <p class="text-gray-600 text-sm">نوع العملية:</p>
+                                    <p id="summary-operation" class="font-semibold text-blue-700">إضافة سيولة</p>
+                                </div>
+                                <div>
+                                    <p class="text-gray-600 text-sm">الفرع المحدد:</p>
+                                    <p id="summary-branch" class="font-semibold text-gray-800">--</p>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-4 mb-6">
+                                <div>
+                                    <p class="text-gray-600 text-sm">السيولة الحالية:</p>
+                                    <p id="summary-current" class="font-bold text-gray-800">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-gray-600 text-sm">السيولة الجديدة:</p>
+                                    <p id="summary-new" class="font-bold text-green-600">--</p>
+                                </div>
+                            </div>
+                            
+                            <div class="p-4 bg-white rounded-lg border">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold text-gray-800">صافي التغيير:</span>
+                                    <span id="summary-change" class="text-2xl font-bold text-blue-600">+0.00 ر.ي</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Button -->
+                    <div class="flex justify-end">
+                        <button id="submit-btn"
+                                class="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:opacity-90 transition flex items-center text-lg font-semibold shadow-lg"
+                                onclick="submitLiquidityUpdate()">
+                            <i class="fas fa-check-circle ml-3 text-xl"></i>
+                            تأكيد العملية
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Transactions -->
+            <div class="bg-white rounded-xl shadow">
+                <div class="p-6 border-b">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-gray-800">آخر العمليات</h2>
+                        <button onclick="refreshTransactions()" 
+                                class="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-lg">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="p-6">
+                    <div id="transactions-container" class="space-y-4 max-h-96 overflow-y-auto custom-scrollbar">
+                        <!-- Transactions will be loaded here -->
+                        <div class="text-center py-8">
+                            <div class="loader mx-auto"></div>
+                            <p class="mt-4 text-gray-600">جاري تحميل العمليات...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column: Branch Information and History -->
+        <div class="space-y-6">
+            <!-- Selected Branch Info -->
+            <div class="bg-white rounded-xl shadow p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-6">معلومات الفرع المحدد</h2>
+                
+                <div id="branch-info" class="text-center py-8 text-gray-500">
+                    <i class="fas fa-university text-4xl mb-4 text-gray-300"></i>
+                    <p>لم يتم اختيار فرع</p>
+                    <p class="text-sm mt-2">يرجى اختيار فرع من القائمة</p>
+                </div>
+            </div>
+            
+            <!-- Liquidity Limits -->
+            <div class="bg-white rounded-xl shadow p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-6">حدود السيولة</h2>
+                
+                <div id="limits-info" class="space-y-4">
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-chart-bar text-3xl mb-4 text-gray-300"></i>
+                        <p>لا توجد بيانات</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick History -->
+            <div class="bg-white rounded-xl shadow p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">التغييرات الأخيرة</h2>
+                    <span class="text-sm text-gray-600" id="history-count">0 عملية</span>
+                </div>
+                
+                <div id="history-container" class="space-y-6">
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-history text-3xl mb-4 text-gray-300"></i>
+                        <p>لا توجد سجلات</p>
+                        <p class="text-sm mt-2">سيظهر تاريخ التعديلات هنا</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Basel III Compliance -->
+            <div class="bg-gradient-to-r from-blue-900 to-blue-800 text-white rounded-xl shadow p-6">
+                <div class="flex items-center mb-4">
+                    <div class="bg-white bg-opacity-20 p-3 rounded-lg ml-4">
+                        <i class="fas fa-shield-check text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold">معايير الأمان</h3>
+                        <p class="text-blue-200 text-sm opacity-90">متابعة التغييرات</p>
+                    </div>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm">التغييرات اليوم:</span>
+                        <span class="font-bold" id="today-changes">0</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm">آخر تعديل:</span>
+                        <span class="text-sm" id="last-update">--:--</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm">حالة النظام:</span>
+                        <span class="text-green-400 font-semibold">آمن</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<!-- Add Branch Modal -->
+<div id="add-branch-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate__animated animate__zoomIn">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800">إضافة فرع جديد</h3>
+                <button onclick="closeAddBranchModal()" 
+                        class="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <form id="add-branch-form">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">اسم الفرع</label>
+                        <input type="text" 
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                               name="name" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">الكود</label>
+                        <input type="text" 
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                               name="code" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">الموقع</label>
+                        <input type="text" 
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                               name="location" required>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">الحد الأدنى</label>
+                            <div class="relative">
+                                <input type="number" 
+                                       step="0.01" 
+                                       min="0"
+                                       class="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                       name="min_liquidity" required>
+                                <span class="absolute left-3 top-3 text-gray-500">ر.ي</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">الحد الأقصى</label>
+                            <div class="relative">
+                                <input type="number" 
+                                       step="0.01" 
+                                       min="0"
+                                       class="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                       name="max_liquidity" required>
+                                <span class="absolute left-3 top-3 text-gray-500">ر.ي</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">السيولة الأولية</label>
+                        <div class="relative">
+                            <input type="number" 
+                                   step="0.01" 
+                                   min="0"
+                                   class="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                   name="initial_liquidity" required>
+                            <span class="absolute left-3 top-3 text-gray-500">ر.ي</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 space-x-reverse mt-6">
+                    <button type="button" onclick="closeAddBranchModal()"
+                            class="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                        إلغاء
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center">
+                        <span>إضافة الفرع</span>
+                        <i class="fas fa-plus ml-2"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Update Modal -->
+<div id="bulk-update-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg animate__animated animate__zoomIn">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800">تحديث جماعي للسيولة</h3>
+                <button onclick="closeBulkUpdateModal()" 
+                        class="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="mb-6">
+                <p class="text-gray-600 mb-4">يمكنك تحديث سيولة عدة فروع دفعة واحدة باستخدام ملف Excel</p>
+                
+                <div class="bg-blue-50 p-4 rounded-lg mb-4">
+                    <div class="flex items-center">
+                        <i class="fas fa-info-circle text-blue-600 ml-3"></i>
+                        <div>
+                            <p class="text-blue-800 font-medium">نموذج الملف المطلوب:</p>
+                            <p class="text-sm text-blue-600">يجب أن يحتوي الملف على الأعمدة التالية: branch_code, amount, operation, description</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer"
+                     onclick="document.getElementById('bulk-file-input').click()">
+                    <i class="fas fa-file-excel text-4xl text-green-600 mb-4"></i>
+                    <p class="font-semibold text-gray-700">انقر لرفع ملف Excel</p>
+                    <p class="text-sm text-gray-600 mt-2">أو اسحب الملف هنا</p>
+                    <input type="file" id="bulk-file-input" class="hidden" accept=".xlsx,.xls,.csv">
+                </div>
+                
+                <div id="bulk-preview" class="hidden mt-6">
+                    <h4 class="font-bold text-gray-800 mb-3">معاينة البيانات:</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="py-2 px-3 text-right">الكود</th>
+                                    <th class="py-2 px-3 text-right">المبلغ</th>
+                                    <th class="py-2 px-3 text-right">العملية</th>
+                                    <th class="py-2 px-3 text-right">الوصف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bulk-preview-body">
+                                <!-- Preview rows will be added here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-3 space-x-reverse mt-6">
+                <button type="button" onclick="closeBulkUpdateModal()"
+                        class="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                    إلغاء
+                </button>
+                <button id="bulk-submit-btn" onclick="processBulkUpdate()"
+                        class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center">
+                    <span>معالجة البيانات</span>
+                    <i class="fas fa-play ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Modal -->
+<div id="success-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate__animated animate__zoomIn">
+        <div class="p-6">
+            <div class="text-center">
+                <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i class="fas fa-check text-3xl text-green-600"></i>
+                </div>
+                
+                <h3 class="text-xl font-bold text-gray-800 mb-2" id="success-title">تمت العملية بنجاح</h3>
+                <p class="text-gray-600 mb-6" id="success-message">تم تحديث السيولة بنجاح</p>
+                
+                <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-gray-600">السيولة الجديدة:</span>
+                        <span class="font-bold text-green-600" id="success-new-amount">0.00 ر.ي</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">التغيير:</span>
+                        <span class="font-bold text-blue-600" id="success-change">+0.00 ر.ي</span>
+                    </div>
+                </div>
+                
+                <div class="flex space-x-3 space-x-reverse">
+                    <button onclick="closeSuccessModal()"
+                            class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                        موافق
+                    </button>
+                    <button onclick="printReceipt()"
+                            class="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center">
+                        <i class="fas fa-print ml-2"></i>
+                        طباعة إيصال
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Global variables
+    let selectedOperation = 'add';
+    let selectedBranch = null;
+    let branchesData = [];
+    let todayChanges = 0;
+    
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadBranches();
+        updateSummary();
+        
+        // Listen for amount input changes
+        document.getElementById('amount-input').addEventListener('input', updateSummary);
+        
+        // Initialize today's date for history
+        updateTodayChanges();
+    });
+    
+    // Set operation type
+    function setOperation(operation) {
+        selectedOperation = operation;
+        
+        // Update button states
+        document.querySelectorAll('.operation-btn').forEach(btn => {
+            btn.classList.remove('active');
+            btn.classList.remove('border-green-500', 'border-red-500', 'border-blue-500');
+            btn.classList.add('border-gray-200');
+        });
+        
+        let activeBtn, borderColor;
+        switch(operation) {
+            case 'add':
+                activeBtn = document.getElementById('operation-add');
+                borderColor = 'border-green-500';
+                break;
+            case 'withdraw':
+                activeBtn = document.getElementById('operation-withdraw');
+                borderColor = 'border-red-500';
+                break;
+            case 'set':
+                activeBtn = document.getElementById('operation-set');
+                borderColor = 'border-blue-500';
+                break;
+        }
+        
+        if (activeBtn) {
+            activeBtn.classList.add('active', borderColor);
+        }
+        
+        updateSummary();
+    }
+    
+    // Set amount from quick buttons
+    function setAmount(amount) {
+        const input = document.getElementById('amount-input');
+        input.value = amount.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+        updateSummary();
+    }
+    
+    // Load branches
+    async function loadBranches() {
+        try {
+            const response = await fetch('/api/branches');
+            const data = await response.json();
+            
+            if (data.branches) {
+                branchesData = data.branches;
+                renderBranches();
+                
+                // Select first branch by default
+                if (branchesData.length > 0) {
+                    selectBranch(branchesData[0].id);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading branches:', error);
+            showError('خطأ في تحميل الفروع');
+        }
+    }
+    
+    // Render branches
+    function renderBranches() {
+        const container = document.getElementById('branches-container');
+        if (!container) return;
+        
+        if (branchesData.length === 0) {
+            container.innerHTML = `
+                <div class="col-span-2 text-center py-8 text-gray-500">
+                    <i class="fas fa-inbox text-4xl mb-4 text-gray-300"></i>
+                    <p>لا توجد فروع متاحة</p>
+                    <p class="text-sm mt-2">يرجى إضافة فروع جديدة</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        branchesData.forEach(branch => {
+            const percentage = (branch.current_liquidity / branch.max_liquidity * 100) || 0;
+            const statusClass = branch.current_liquidity < branch.min_liquidity ? 'bg-red-100 text-red-800' :
+                              branch.current_liquidity < branch.min_liquidity * 1.2 ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-green-100 text-green-800';
+            const statusText = branch.current_liquidity < branch.min_liquidity ? 'تحت الحد' :
+                             branch.current_liquidity < branch.min_liquidity * 1.2 ? 'قريب من الحد' :
+                             'طبيعي';
+            
+            html += `
+                <div class="branch-card p-4 border border-gray-200 rounded-xl cursor-pointer hover:border-blue-400 transition-colors ${selectedBranch === branch.id ? 'border-2 border-blue-500 bg-blue-50' : ''}"
+                     onclick="selectBranch(${branch.id})"
+                     data-branch-id="${branch.id}">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <h4 class="font-bold text-gray-800">${branch.name}</h4>
+                            <p class="text-sm text-gray-600">${branch.code}</p>
+                        </div>
+                        <span class="px-2 py-1 rounded-full text-xs font-medium ${statusClass}">
+                            ${statusText}
+                        </span>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-sm text-gray-600">السيولة الحالية</span>
+                            <span class="font-bold ${branch.current_liquidity < branch.min_liquidity ? 'text-red-600' : 'text-green-600'}">
+                                ${branch.current_liquidity.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.ي
+                            </span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="h-2 rounded-full 
+                                ${percentage > 80 ? 'bg-red-500' : 
+                                  percentage > 60 ? 'bg-yellow-500' : 
+                                  'bg-green-500'}" 
+                                style="width: ${Math.min(percentage, 100)}%">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between text-xs text-gray-500">
+                        <span>الحد الأدنى: ${branch.min_liquidity.toLocaleString('ar-SA')} ر.ي</span>
+                        <span>السعة: ${branch.max_liquidity.toLocaleString('ar-SA')} ر.ي</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+    
+    // Select branch
+    function selectBranch(branchId) {
+        selectedBranch = branchId;
+        
+        // Update UI
+        document.querySelectorAll('.branch-card').forEach(card => {
+            card.classList.remove('border-2', 'border-blue-500', 'bg-blue-50');
+            if (parseInt(card.dataset.branchId) === branchId) {
+                card.classList.add('border-2', 'border-blue-500', 'bg-blue-50');
+            }
+        });
+        
+        updateBranchInfo();
+        updateSummary();
+        loadBranchTransactions();
+        loadBranchHistory();
+    }
+    
+    // Update branch info
+    function updateBranchInfo() {
+        const branch = branchesData.find(b => b.id === selectedBranch);
+        const infoContainer = document.getElementById('branch-info');
+        const limitsContainer = document.getElementById('limits-info');
+        
+        if (!branch) {
+            infoContainer.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <i class="fas fa-university text-4xl mb-4 text-gray-300"></i>
+                    <p>لم يتم اختيار فرع</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Update branch info
+        infoContainer.innerHTML = `
+            <div class="text-right">
+                <h3 class="font-bold text-xl text-gray-800 mb-2">${branch.name}</h3>
+                <p class="text-gray-600 mb-4">${branch.code}</p>
+                
+                <div class="mb-4">
+                    <div class="text-3xl font-bold mb-1 
+                        ${branch.current_liquidity < branch.min_liquidity ? 'text-red-600' : 
+                          branch.current_liquidity < branch.min_liquidity * 1.2 ? 'text-yellow-600' : 
+                          'text-green-600'}">
+                        ${branch.current_liquidity.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.ي
+                    </div>
+                    <p class="text-sm text-gray-600">السيولة الحالية</p>
+                </div>
+                
+                <div class="text-sm text-gray-500">
+                    <p>آخر تحديث: ${new Date().toLocaleTimeString('ar-SA')}</p>
+                </div>
+            </div>
+        `;
+        
+        // Update limits info
+        const utilization = (branch.current_liquidity / branch.max_liquidity * 100) || 0;
+        limitsContainer.innerHTML = `
+            <div class="space-y-4">
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-gray-600">الحد الأدنى:</span>
+                        <span class="font-bold">${branch.min_liquidity.toLocaleString('ar-SA')} ر.ي</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="h-2 rounded-full bg-yellow-500" style="width: ${(branch.min_liquidity / branch.max_liquidity * 100)}%"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-gray-600">السعة القصوى:</span>
+                        <span class="font-bold">${branch.max_liquidity.toLocaleString('ar-SA')} ر.ي</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="h-2 rounded-full bg-blue-500"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-gray-600">معدل الاستخدام:</span>
+                        <span class="font-bold ${utilization > 80 ? 'text-red-600' : utilization > 60 ? 'text-yellow-600' : 'text-green-600'}">
+                            ${utilization.toFixed(1)}%
+                        </span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="h-2 rounded-full 
+                            ${utilization > 80 ? 'bg-red-500' : 
+                              utilization > 60 ? 'bg-yellow-500' : 
+                              'bg-green-500'}" 
+                            style="width: ${utilization}%">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Update summary
+    function updateSummary() {
+        const branch = branchesData.find(b => b.id === selectedBranch);
+        const amountInput = document.getElementById('amount-input');
+        const amount = parseFloat(amountInput.value) || 0;
+        
+        if (!branch) {
+            // Reset summary
+            document.getElementById('summary-operation').textContent = 'إضافة سيولة';
+            document.getElementById('summary-branch').textContent = '--';
+            document.getElementById('summary-current').textContent = '--';
+            document.getElementById('summary-new').textContent = '--';
+            document.getElementById('summary-change').textContent = '+0.00 ر.ي';
+            return;
+        }
+        
+        // Update operation text
+        let operationText = '';
+        switch(selectedOperation) {
+            case 'add': operationText = 'إضافة سيولة'; break;
+            case 'withdraw': operationText = 'سحب سيولة'; break;
+            case 'set': operationText = 'تعديل مباشر'; break;
+        }
+        
+        // Calculate new amount
+        let newAmount = branch.current_liquidity;
+        let change = 0;
+        
+        if (selectedOperation === 'add') {
+            newAmount = branch.current_liquidity + amount;
+            change = amount;
+        } else if (selectedOperation === 'withdraw') {
+            newAmount = branch.current_liquidity - amount;
+            change = -amount;
+        } else if (selectedOperation === 'set') {
+            newAmount = amount;
+            change = amount - branch.current_liquidity;
+        }
+        
+        // Update summary
+        document.getElementById('summary-operation').textContent = operationText;
+        document.getElementById('summary-branch').textContent = branch.name;
+        document.getElementById('summary-current').textContent = 
+            branch.current_liquidity.toLocaleString('ar-SA', {minimumFractionDigits: 2}) + ' ر.ي';
+        document.getElementById('summary-new').textContent = 
+            newAmount.toLocaleString('ar-SA', {minimumFractionDigits: 2}) + ' ر.ي';
+        
+        const changeElement = document.getElementById('summary-change');
+        changeElement.textContent = (change >= 0 ? '+' : '') + 
+            change.toLocaleString('ar-SA', {minimumFractionDigits: 2}) + ' ر.ي';
+        changeElement.className = `text-2xl font-bold ${change > 0 ? 'text-green-600' : change < 0 ? 'text-red-600' : 'text-gray-600'}`;
+    }
+    
+    // Submit liquidity update
+    async function submitLiquidityUpdate() {
+        const branch = branchesData.find(b => b.id === selectedBranch);
+        if (!branch) {
+            showError('يرجى اختيار فرع');
+            return;
+        }
+        
+        const amountInput = document.getElementById('amount-input');
+        const amount = parseFloat(amountInput.value);
+        const description = document.getElementById('description-input').value;
+        
+        if (isNaN(amount) || amount <= 0) {
+            showError('يرجى إدخال مبلغ صحيح');
+            return;
+        }
+        
+        // For withdraw operation, check if enough liquidity
+        if (selectedOperation === 'withdraw' && amount > branch.current_liquidity) {
+            showError(`السيولة غير كافية. الرصيد المتاح: ${branch.current_liquidity.toLocaleString('ar-SA')} ر.ي`);
+            return;
+        }
+        
+        // For set operation, validate new amount
+        if (selectedOperation === 'set') {
+            if (amount > branch.max_liquidity * 1.1) {
+                showError(`المبلغ يتجاوز السعة القصوى المسموح بها (${branch.max_liquidity.toLocaleString('ar-SA')} ر.ي)`);
+                return;
+            }
+        }
+        
+        // Prepare data
+        const data = {
+            branch_id: selectedBranch,
+            amount: amount,
+            operation: selectedOperation === 'withdraw' ? 'add' : selectedOperation, // API expects 'add' for withdrawal with negative amount
+            description: description
+        };
+        
+        // If withdrawal, send negative amount
+        if (selectedOperation === 'withdraw') {
+            data.amount = -amount;
+        }
+        
+        // Show loading
+        const submitBtn = document.getElementById('submit-btn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-3"></i> جاري المعالجة...';
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await fetch('/api/liquidity/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                // Update today's changes count
+                todayChanges++;
+                updateTodayChanges();
+                
+                // Show success modal
+                showSuccessModal(result);
+                
+                // Reset form
+                amountInput.value = '';
+                document.getElementById('description-input').value = '';
+                
+                // Refresh data
+                loadBranches();
+                loadBranchTransactions();
+                loadBranchHistory();
+            } else {
+                showError(result.error || 'حدث خطأ أثناء المعالجة');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showError('خطأ في الاتصال بالخادم');
+        } finally {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    }
+    
+    // Load branch transactions
+    async function loadBranchTransactions() {
+        if (!selectedBranch) return;
+        
+        const container = document.getElementById('transactions-container');
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <div class="loader mx-auto"></div>
+                <p class="mt-4 text-gray-600">جاري تحميل العمليات...</p>
+            </div>
+        `;
+        
+        try {
+            const response = await fetch(`/api/transactions/${selectedBranch}?limit=10`);
+            const data = await response.json();
+            
+            if (data.transactions && data.transactions.length > 0) {
+                let html = '';
+                data.transactions.forEach(transaction => {
+                    const amountClass = transaction.amount >= 0 ? 'positive-amount' : 'negative-amount';
+                    const amountSign = transaction.amount >= 0 ? '+' : '';
+                    const date = new Date(transaction.timestamp);
+                    
+                    html += `
+                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                            <div>
+                                <p class="font-medium text-gray-800">${transaction.description || 'عملية بدون وصف'}</p>
+                                <p class="text-sm text-gray-600 mt-1">
+                                    ${date.toLocaleDateString('ar-SA')} ${date.toLocaleTimeString('ar-SA')}
+                                </p>
+                            </div>
+                            <div class="text-left">
+                                <span class="px-3 py-1 rounded-full text-sm font-medium ${amountClass}">
+                                    ${amountSign}${transaction.amount.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.ي
+                                </span>
+                                <p class="text-xs text-gray-500 mt-1 text-right">${transaction.type}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-exchange-alt text-3xl mb-4 text-gray-300"></i>
+                        <p>لا توجد عمليات حديثة</p>
+                        <p class="text-sm mt-2">سيظهر تاريخ العمليات هنا</p>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading transactions:', error);
+            container.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <i class="fas fa-exclamation-triangle text-3xl mb-4 text-red-300"></i>
+                    <p>خطأ في تحميل العمليات</p>
+                </div>
+            `;
+        }
+    }
+    
+    // Load branch history
+    async function loadBranchHistory() {
+        if (!selectedBranch) return;
+        
+        const container = document.getElementById('history-container');
+        const countElement = document.getElementById('history-count');
+        
+        try {
+            const response = await fetch(`/api/liquidity/history/${selectedBranch}?days=7`);
+            const data = await response.json();
+            
+            if (data.history && data.history.length > 0) {
+                countElement.textContent = `${data.history.length} عملية`;
+                
+                let html = '';
+                data.history.slice(0, 5).forEach((record, index) => {
+                    const date = new Date(record.timestamp);
+                    const hasAlerts = record.alerts && record.alerts.length > 0;
+                    
+                    html += `
+                        <div class="history-item">
+                            <div class="history-dot ${hasAlerts ? 'bg-red-500' : 'bg-blue-500'}"></div>
+                            <div class="flex justify-between items-start mb-2">
+                                <div class="text-right">
+                                    <p class="font-medium text-gray-800">${record.liquidity.toLocaleString('ar-SA', {minimumFractionDigits: 2})} ر.ي</p>
+                                    <p class="text-sm text-gray-600">
+                                        ${date.toLocaleDateString('ar-SA')} ${date.toLocaleTimeString('ar-SA')}
+                                    </p>
+                                </div>
+                                ${hasAlerts ? `
+                                    <span class="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+                                        ${record.alerts.length} تنبيه
+                                    </span>
+                                ` : ''}
+                            </div>
+                            ${hasAlerts ? `
+                                <div class="mt-2 p-2 bg-red-50 rounded-lg">
+                                    <p class="text-xs text-red-700">${record.alerts[0].message}</p>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-history text-3xl mb-4 text-gray-300"></i>
+                        <p>لا توجد سجلات</p>
+                        <p class="text-sm mt-2">سيظهر تاريخ التعديلات هنا</p>
+                    </div>
+                `;
+                countElement.textContent = '0 عملية';
+            }
+        } catch (error) {
+            console.error('Error loading history:', error);
+        }
+    }
+    
+    // Update today's changes
+    function updateTodayChanges() {
+        document.getElementById('today-changes').textContent = todayChanges;
+        document.getElementById('last-update').textContent = new Date().toLocaleTimeString('ar-SA');
+    }
+    
+    // Refresh transactions
+    function refreshTransactions() {
+        loadBranchTransactions();
+        loadBranchHistory();
+    }
+    
+    // Modal functions
+    function showAddBranchModal() {
+        document.getElementById('add-branch-modal').classList.remove('hidden');
+    }
+    
+    function closeAddBranchModal() {
+        document.getElementById('add-branch-modal').classList.add('hidden');
+        document.getElementById('add-branch-form').reset();
+    }
+    
+    function showBulkUpdateModal() {
+        document.getElementById('bulk-update-modal').classList.remove('hidden');
+    }
+    
+    function closeBulkUpdateModal() {
+        document.getElementById('bulk-update-modal').classList.add('hidden');
+        document.getElementById('bulk-file-input').value = '';
+        document.getElementById('bulk-preview').classList.add('hidden');
+    }
+    
+    function showSuccessModal(result) {
+        const modal = document.getElementById('success-modal');
+        const title = document.getElementById('success-title');
+        const message = document.getElementById('success-message');
+        const newAmount = document.getElementById('success-new-amount');
+        const change = document.getElementById('success-change');
+        
+        title.textContent = 'تمت العملية بنجاح';
+        message.textContent = result.message || 'تم تحديث السيولة بنجاح';
+        newAmount.textContent = result.new_liquidity?.toLocaleString('ar-SA', {minimumFractionDigits: 2}) + ' ر.ي' || '0.00 ر.ي';
+        
+        const changeValue = result.change || 0;
+        change.textContent = (changeValue >= 0 ? '+' : '') + 
+            changeValue.toLocaleString('ar-SA', {minimumFractionDigits: 2}) + ' ر.ي';
+        change.className = `font-bold ${changeValue > 0 ? 'text-green-600' : changeValue < 0 ? 'text-red-600' : 'text-gray-600'}`;
+        
+        modal.classList.remove('hidden');
+    }
+    
+    function closeSuccessModal() {
+        document.getElementById('success-modal').classList.add('hidden');
+    }
+    
+    function printReceipt() {
+        // In a real application, this would generate a printable receipt
+        alert('جاري طباعة الإيصال...');
+        closeSuccessModal();
+    }
+    
+    // Show error message
+    function showError(message) {
+        alert('❌ ' + message);
+    }
+    
+    // Add branch form submission
+    document.getElementById('add-branch-form')?.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const data = Object.fromEntries(formData.entries());
+        
+        // Validate
+        if (parseFloat(data.min_liquidity) >= parseFloat(data.max_liquidity)) {
+            showError('الحد الأدنى يجب أن يكون أقل من الحد الأقصى');
+            return;
+        }
+        
+        if (parseFloat(data.initial_liquidity) > parseFloat(data.max_liquidity)) {
+            showError('السيولة الأولية تتجاوز السعة القصوى');
+            return;
+        }
+        
+        // Convert numeric values
+        data.min_liquidity = parseFloat(data.min_liquidity);
+        data.max_liquidity = parseFloat(data.max_liquidity);
+        data.initial_liquidity = parseFloat(data.initial_liquidity);
+        
+        // Show loading
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+        submitBtn.disabled = true;
+        
+        try {
+            // Simulate API call
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // In a real application, you would send this to your API
+            alert('✅ تم إضافة الفرع بنجاح');
+            closeAddBranchModal();
+            
+            // Refresh branches list
+            loadBranches();
+        } catch (error) {
+            showError('خطأ في إضافة الفرع');
+        } finally {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+    
+    // Handle bulk file upload
+    document.getElementById('bulk-file-input')?.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        // Validate file type
+        const validTypes = ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv'];
+        if (!validTypes.includes(file.type)) {
+            showError('نوع الملف غير مدعوم. يرجى رفع ملف Excel أو CSV');
+            return;
+        }
+        
+        // Simulate file processing
+        const preview = document.getElementById('bulk-preview');
+        const previewBody = document.getElementById('bulk-preview-body');
+        
+        preview.classList.remove('hidden');
+        previewBody.innerHTML = `
+            <tr>
+                <td class="py-2 px-3">BR001</td>
+                <td class="py-2 px-3">1,000,000.00</td>
+                <td class="py-2 px-3">إضافة</td>
+                <td class="py-2 px-3">تحويل من المركز</td>
+            </tr>
+            <tr>
+                <td class="py-2 px-3">BR002</td>
+                <td class="py-2 px-3">500,000.00</td>
+                <td class="py-2 px-3">سحب</td>
+                <td class="py-2 px-3">سحب نقدي</td>
+            </tr>
+            <tr>
+                <td class="py-2 px-3">BR003</td>
+                <td class="py-2 px-3">2,500,000.00</td>
+                <td class="py-2 px-3">تعديل</td>
+                <td class="py-2 px-3">تسوية رصيد</td>
+            </tr>
+        `;
+    });
+    
+    // Process bulk update
+    async function processBulkUpdate() {
+        const submitBtn = document.getElementById('bulk-submit-btn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+        submitBtn.disabled = true;
+        
+        // Simulate processing
+        setTimeout(() => {
+            showSuccessModal({
+                message: 'تم معالجة 3 سجلات بنجاح',
+                new_liquidity: 0,
+                change: 0
+            });
+            
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+            closeBulkUpdateModal();
+        }, 2000);
+    }
+    
+    // Close modals when clicking outside
+    document.getElementById('add-branch-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeAddBranchModal();
+        }
+    });
+    
+    document.getElementById('bulk-update-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeBulkUpdateModal();
+        }
+    });
+    
+    document.getElementById('success-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeSuccessModal();
+        }
+    });
+</script>
+{% endblock %}

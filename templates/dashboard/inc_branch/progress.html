@@ -1,0 +1,54 @@
+  <div class="mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-gray-800">مستوى السيولة</h3>
+                    <span class="text-sm text-gray-600">
+                        {% if recent_record and recent_record.current_liquidity < branch.min_liquidity %}
+                            <span class="text-red-600 font-semibold">⬇ تحت الحد الأدنى</span>
+                        {% elif recent_record and recent_record.current_liquidity < branch.min_liquidity * 1.2 %}
+                            <span class="text-yellow-600 font-semibold">⚠ قريب من الحد</span>
+                        {% else %}
+                            <span class="text-green-600 font-semibold">✅ مستوى آمن</span>
+                        {% endif %}
+                    </span>
+                </div>
+               {{ min_percentage}}
+                <div class="bg-gray-100 p-4 rounded-xl">
+                    <div class="relative h-8 rounded-full overflow-hidden bg-white border border-gray-300">
+                        <!-- Minimum threshold marker -->
+                        <div class="absolute h-full w-0.5 bg-yellow-500" 
+                             style="right:{{ min_percentage|round(0) }}%">
+                            <div class="absolute top-0 left-0 transform -translate-x-1/2 -translate-y-full text-xs text-yellow-700 font-semibold">
+                                الحد الأدنى
+                            </div>
+                        </div>
+                      
+                        <!-- Current liquidity -->
+                        <div class="absolute h-full rounded-full 
+                            {% if recent_record and recent_record.current_liquidity < branch.min_liquidity %}bg-red-500
+                            {% elif recent_record and recent_record.current_liquidity < branch.min_liquidity * 1.2 %}bg-yellow-500
+                            {% else %}bg-green-500{% endif %}" 
+                            style="width: {{ utilization_percentage|round(0) }}%;
+                                   animation: fillProgress 1.5s ease-out forwards;">
+                        </div>
+                    
+                        <!-- Current position indicator -->
+                        {% if recent_record %}
+                        <div class="absolute h-10 w-1 bg-gray-800 transform -translate-y-1"
+                             style="right:  {{((recent_record.current_liquidity if recent_record else 0) / branch.max_liquidity * 100) }}%;">
+                            <div class="absolute top-full left-1/2 transform -translate-x-1/2 text-xs font-bold mt-1 
+                                {% if recent_record.current_liquidity < branch.min_liquidity %}text-red-600
+                                {% elif recent_record.current_liquidity < branch.min_liquidity * 1.2 %}text-yellow-600
+                                {% else %}text-green-600{% endif %}">
+                                
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex justify-between text-sm text-gray-600 mt-2">
+                        <span>0 ر.ي</span>
+                        <span>{{ "%.2f"|format(branch.min_liquidity) }} ر.ي (الحد الأدنى)</span>
+                        <span>{{ "%.2f"|format(branch.max_liquidity) }} ر.ي (السعة القصوى)</span>
+                    </div>
+                </div>
+            </div>

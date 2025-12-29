@@ -1,0 +1,2313 @@
+{% extends "base.html" %}
+
+{% block title %}إعدادات النظام{% endblock %}
+
+{% block extra_css %}
+<style>
+    .settings-section {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    }
+    
+    .settings-card {
+        transition: all 0.3s ease;
+    }
+    
+    .settings-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .tab-button {
+        transition: all 0.3s ease;
+        border-bottom: 3px solid transparent;
+    }
+    
+    .tab-button.active {
+        border-bottom-color: #3b82f6;
+        color: #3b82f6;
+        font-weight: 600;
+    }
+    
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 30px;
+    }
+    
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 34px;
+    }
+    
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 22px;
+        width: 22px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+    
+    input:checked + .toggle-slider {
+        background-color: #3b82f6;
+    }
+    
+    input:checked + .toggle-slider:before {
+        transform: translateX(30px);
+    }
+    
+    .color-picker {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        cursor: pointer;
+        border: 2px solid #e5e7eb;
+    }
+    
+    .color-picker.active {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+    
+    .theme-preview {
+        border-radius: 12px;
+        overflow: hidden;
+        border: 2px solid #e5e7eb;
+        transition: all 0.3s ease;
+    }
+    
+    .theme-preview:hover {
+        border-color: #3b82f6;
+        transform: scale(1.02);
+    }
+    
+    .theme-preview.active {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+    
+    .backup-card {
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        border: 2px dashed #cbd5e1;
+    }
+    
+    .backup-card:hover {
+        background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+        border-color: #94a3b8;
+    }
+    
+    .security-level {
+        height: 8px;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .security-fill {
+        height: 100%;
+        transition: width 0.5s ease;
+    }
+    
+    /* Animation for status changes */
+    @keyframes statusChange {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+    
+    .status-changing {
+        animation: statusChange 0.5s ease;
+    }
+    
+    /* Custom scrollbar for settings */
+    .settings-scroll {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    
+    .settings-scroll::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .settings-scroll::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+    
+    .settings-scroll::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 3px;
+    }
+    
+    .settings-scroll::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate__animated animate__fadeIn">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-2">إعدادات النظام</h1>
+                <p class="text-gray-600">إدارة كافة إعدادات نظام إدارة السيولة الذكي</p>
+            </div>
+            
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <button onclick="saveAllSettings()" 
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                    <i class="fas fa-save ml-2"></i>
+                    حفظ جميع الإعدادات
+                </button>
+                
+                <button onclick="restoreDefaults()"
+                        class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center">
+                    <i class="fas fa-undo ml-2"></i>
+                    استعادة الافتراضيات
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Settings Tabs -->
+    <div class="bg-white rounded-xl shadow mb-6">
+        <div class="border-b border-gray-200">
+            <nav class="flex overflow-x-auto">
+                <button id="tab-general" 
+                        class="tab-button active px-6 py-4 text-gray-600 hover:text-blue-600 whitespace-nowrap"
+                        onclick="switchTab('general')">
+                    <i class="fas fa-cog ml-2"></i>
+                    الإعدادات العامة
+                </button>
+                
+                <button id="tab-security" 
+                        class="tab-button px-6 py-4 text-gray-600 hover:text-blue-600 whitespace-nowrap"
+                        onclick="switchTab('security')">
+                    <i class="fas fa-shield-alt ml-2"></i>
+                    الأمان والصلاحيات
+                </button>
+                
+                <button id="tab-notifications" 
+                        class="tab-button px-6 py-4 text-gray-600 hover:text-blue-600 whitespace-nowrap"
+                        onclick="switchTab('notifications')">
+                    <i class="fas fa-bell ml-2"></i>
+                    الإشعارات والتنبيهات
+                </button>
+                
+                <button id="tab-appearance" 
+                        class="tab-button px-6 py-4 text-gray-600 hover:text-blue-600 whitespace-nowrap"
+                        onclick="switchTab('appearance')">
+                    <i class="fas fa-palette ml-2"></i>
+                    المظهر والواجهة
+                </button>
+                
+                <button id="tab-integrations" 
+                        class="tab-button px-6 py-4 text-gray-600 hover:text-blue-600 whitespace-nowrap"
+                        onclick="switchTab('integrations')">
+                    <i class="fas fa-plug ml-2"></i>
+                    التكاملات والواجهات
+                </button>
+                
+                <button id="tab-backup" 
+                        class="tab-button px-6 py-4 text-gray-600 hover:text-blue-600 whitespace-nowrap"
+                        onclick="switchTab('backup')">
+                    <i class="fas fa-database ml-2"></i>
+                    النسخ الاحتياطي
+                </button>
+                
+                <button id="tab-advanced" 
+                        class="tab-button px-6 py-4 text-gray-600 hover:text-blue-600 whitespace-nowrap"
+                        onclick="switchTab('advanced')">
+                    <i class="fas fa-tools ml-2"></i>
+                    إعدادات متقدمة
+                </button>
+            </nav>
+        </div>
+        
+        <!-- Tab Content -->
+        <div class="p-6">
+            <!-- General Settings Tab -->
+            <div id="content-general" class="tab-content">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- System Settings -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-server ml-3 text-blue-600"></i>
+                            إعدادات النظام الأساسية
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">اسم النظام</label>
+                                <input type="text" 
+                                       id="system-name"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                       value="نظام إدارة السيولة الذكي">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">المنطقة الزمنية</label>
+                                <select id="timezone"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="Asia/Riyadh" selected>صنعاء (توقيت السعودية)</option>
+                                    <option value="Asia/Dubai">دبي (توقيت الإمارات)</option>
+                                    <option value="Asia/Qatar">الدوحة (توقيت قطر)</option>
+                                    <option value="Asia/Kuwait">الكويت (توقيت الكويت)</option>
+                                    <option value="UTC">توقيت عالمي (UTC)</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">لغة النظام</label>
+                                <select id="language"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="ar" selected>العربية</option>
+                                    <option value="en">الإنجليزية</option>
+                                    <option value="ar-en">عربي/إنجليزي</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">عملة النظام</label>
+                                <select id="currency"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="SAR" selected>الريال السعودي (ر.ي)</option>
+                                    <option value="USD">الدولار الأمريكي ($)</option>
+                                    <option value="EUR">اليورو (€)</option>
+                                    <option value="AED">الدرهم الإماراتي (د.إ)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">وضع الصيانة</label>
+                                    <p class="text-sm text-gray-600">تعطيل النظام للصيانة</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="maintenance-mode">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Basel III Compliance Settings -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-shield-check ml-3 text-green-600"></i>
+                            إعدادات Basel III
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">نسبة الحد الأدنى للسيولة (LCR)</label>
+                                <div class="flex items-center space-x-3 space-x-reverse">
+                                    <input type="range" 
+                                           id="lcr-threshold"
+                                           min="80" max="150" step="5" 
+                                           value="100"
+                                           class="flex-1"
+                                           oninput="updateLCRValue(this.value)">
+                                    <span id="lcr-value" class="text-lg font-bold text-green-600">100%</span>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">نسبة السيولة إلى الالتزامات خلال 30 يومًا</p>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">صافي التمويل المستقر (NSFR)</label>
+                                <div class="flex items-center space-x-3 space-x-reverse">
+                                    <input type="range" 
+                                           id="nsfr-threshold"
+                                           min="90" max="130" step="5" 
+                                           value="100"
+                                           class="flex-1"
+                                           oninput="updateNSFRValue(this.value)">
+                                    <span id="nsfr-value" class="text-lg font-bold text-green-600">100%</span>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">نسبة الأصول المستقرة إلى الالتزامات</p>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">حد التنبيه المبكر</label>
+                                <div class="flex items-center space-x-3 space-x-reverse">
+                                    <input type="range" 
+                                           id="early-warning"
+                                           min="5" max="30" step="5" 
+                                           value="20"
+                                           class="flex-1"
+                                           oninput="updateEarlyWarningValue(this.value)">
+                                    <span id="early-warning-value" class="text-lg font-bold text-yellow-600">20%</span>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">النسبة المئوية فوق الحد الأدنى لإطلاق التنبيه</p>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">التوافق التلقائي</label>
+                                    <p class="text-sm text-gray-600">ضبط تلقائي للإعدادات حسب Basel III</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="auto-compliance" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Branch Management -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6 lg:col-span-2">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-code-branch ml-3 text-purple-600"></i>
+                            إدارة الفروع الافتراضية
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">الحد الأدنى للسيولة الافتراضي</label>
+                                <div class="relative">
+                                    <input type="number" 
+                                           id="default-min-liquidity"
+                                           step="1000" min="0"
+                                           class="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                           value="1000000">
+                                    <span class="absolute left-3 top-3 text-gray-500">ر.ي</span>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">الحد الأقصى للسيولة الافتراضي</label>
+                                <div class="relative">
+                                    <input type="number" 
+                                           id="default-max-liquidity"
+                                           step="1000" min="0"
+                                           class="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                           value="5000000">
+                                    <span class="absolute left-3 top-3 text-gray-500">ر.ي</span>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">فترة تحديث السيولة</label>
+                                <select id="liquidity-update-interval"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="30" selected>30 ثانية</option>
+                                    <option value="60">دقيقة واحدة</option>
+                                    <option value="300">5 دقائق</option>
+                                    <option value="600">10 دقائق</option>
+                                    <option value="1800">30 دقيقة</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">توقيت التقارير اليومية</label>
+                                <input type="time" 
+                                       id="daily-report-time"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                       value="23:00">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Security Settings Tab -->
+            <div id="content-security" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Authentication Settings -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-user-shield ml-3 text-red-600"></i>
+                            إعدادات المصادقة
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">المصادقة الثنائية (2FA)</label>
+                                    <p class="text-sm text-gray-600">تطبيق Google Authenticator</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="2fa-enabled">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">مدة انتهاء الجلسة</label>
+                                    <p class="text-sm text-gray-600">تسجيل الخروج التلقائي بعد:</p>
+                                </div>
+                                <select id="session-timeout"
+                                        class="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                                    <option value="15">15 دقيقة</option>
+                                    <option value="30" selected>30 دقيقة</option>
+                                    <option value="60">ساعة واحدة</option>
+                                    <option value="120">ساعتين</option>
+                                    <option value="0">لا تنتهي</option>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">حد محاولات تسجيل الدخول</label>
+                                    <p class="text-sm text-gray-600">قفل الحساب بعد:</p>
+                                </div>
+                                <select id="max-login-attempts"
+                                        class="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                                    <option value="3">3 محاولات</option>
+                                    <option value="5" selected>5 محاولات</option>
+                                    <option value="10">10 محاولات</option>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">تسجيل نشاط المستخدم</label>
+                                    <p class="text-sm text-gray-600">تسجيل جميع الإجراءات</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="user-activity-logging" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">قوة كلمات المرور</label>
+                                <div class="security-level bg-gray-200 mb-2">
+                                    <div id="password-strength" class="security-fill bg-green-500" style="width: 80%"></div>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-600">المستوى الحالي:</span>
+                                    <span class="font-bold text-green-600">قوي</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Role Permissions -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-users-cog ml-3 text-purple-600"></i>
+                            إدارة الصلاحيات (RBAC)
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">صلاحيات مدير النظام</label>
+                                <div class="space-y-2 settings-scroll p-3 bg-gray-50 rounded-lg max-h-40">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="perm-admin-view" class="ml-2" checked disabled>
+                                        <label for="perm-admin-view" class="text-gray-700">عرض جميع البيانات</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="perm-admin-edit" class="ml-2" checked disabled>
+                                        <label for="perm-admin-edit" class="text-gray-700">تعديل جميع البيانات</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="perm-admin-delete" class="ml-2" checked disabled>
+                                        <label for="perm-admin-delete" class="text-gray-700">حذف البيانات</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="perm-admin-users" class="ml-2" checked disabled>
+                                        <label for="perm-admin-users" class="text-gray-700">إدارة المستخدمين</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="perm-admin-branches" class="ml-2" checked disabled>
+                                        <label for="perm-admin-branches" class="text-gray-700">إدارة الفروع</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="perm-admin-settings" class="ml-2" checked disabled>
+                                        <label for="perm-admin-settings" class="text-gray-700">تعديل الإعدادات</label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">صلاحيات مدير الفرع</label>
+                                <div class="space-y-2 settings-scroll p-3 bg-gray-50 rounded-lg max-h-40">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="perm-manager-view" class="ml-2" checked>
+                                        <label for="perm-manager-view" class="text-gray-700">عرض بيانات الفرع</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="perm-manager-edit" class="ml-2" checked>
+                                        <label for="perm-manager-edit" class="text-gray-700">تعديل بيانات الفرع</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="perm-manager-transfer" class="ml-2" checked>
+                                        <label for="perm-manager-transfer" class="text-gray-700">تحويل الأموال</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="perm-manager-reports" class="ml-2" checked>
+                                        <label for="perm-manager-reports" class="text-gray-700">إنشاء التقارير</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="perm-manager-alerts" class="ml-2">
+                                        <label for="perm-manager-alerts" class="text-gray-700">تعديل التنبيهات</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Data Encryption -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6 lg:col-span-2">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-lock ml-3 text-blue-600"></i>
+                            تشفير البيانات
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">خوارزمية التشفير</label>
+                                <select id="encryption-algorithm"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="AES-256" selected>AES-256 (مستحسن)</option>
+                                    <option value="AES-192">AES-192</option>
+                                    <option value="AES-128">AES-128</option>
+                                    <option value="3DES">3DES</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">مدة مفاتيح التشفير</label>
+                                <select id="key-rotation"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="30">شهريًا</option>
+                                    <option value="90" selected>ربع سنوي</option>
+                                    <option value="180">نصف سنوي</option>
+                                    <option value="365">سنويًا</option>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-center justify-between md:col-span-2">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">تشفير قاعدة البيانات</label>
+                                    <p class="text-sm text-gray-600">تشفير جميع البيانات الحساسة</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="db-encryption" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="md:col-span-2">
+                                <button onclick="rotateEncryptionKeys()"
+                                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                                    <i class="fas fa-sync-alt ml-2"></i>
+                                    تدوير مفاتيح التشفير الآن
+                                </button>
+                                <p class="text-sm text-gray-600 mt-2">سيتم إنشاء مفاتيح تشفير جديدة وإعادة تشفير البيانات</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Notifications Settings Tab -->
+            <div id="content-notifications" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Alert Settings -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-bell ml-3 text-yellow-600"></i>
+                            إعدادات التنبيهات
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">تنبيهات السيولة المنخفضة</label>
+                                    <p class="text-sm text-gray-600">عند وصول السيولة للحد الأدنى</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="low-liquidity-alerts" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">تنبيهات التحويلات الكبيرة</label>
+                                    <p class="text-sm text-gray-600">للتحويلات فوق مليون ريال</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="large-transfer-alerts" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">تنبيهات النشاط غير المعتاد</label>
+                                    <p class="text-sm text-gray-600">كشف النشاط المشبوه</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="suspicious-activity-alerts" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">عتبة التحويلات الكبيرة</label>
+                                <div class="relative">
+                                    <input type="number" 
+                                           id="large-transfer-threshold"
+                                           step="1000" min="0"
+                                           class="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                           value="1000000">
+                                    <span class="absolute left-3 top-3 text-gray-500">ر.ي</span>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">وسائل الإشعار</label>
+                                <div class="space-y-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="notify-inapp" class="ml-2" checked>
+                                        <label for="notify-inapp" class="text-gray-700">الإشعارات داخل التطبيق</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="notify-email" class="ml-2" checked>
+                                        <label for="notify-email" class="text-gray-700">البريد الإلكتروني</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="notify-sms" class="ml-2">
+                                        <label for="notify-sms" class="text-gray-700">رسائل SMS</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="notify-telegram" class="ml-2">
+                                        <label for="notify-telegram" class="text-gray-700">Telegram</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Notification Templates -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-envelope ml-3 text-blue-600"></i>
+                            قوالب الإشعارات
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">قالب تنبيه السيولة المنخفضة</label>
+                                <textarea id="low-liquidity-template"
+                                          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                          rows="3"
+                                          placeholder="أدخل نص التنبيه...">
+🚨 تنبيه: السيولة في فرع {{branch_name}} وصلت إلى {{liquidity_amount}} ر.ي، أقل من الحد الأدنى المطلوب {{min_liquidity}} ر.ي
+                                </textarea>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">قالب تنبيه التحويل الكبير</label>
+                                <textarea id="large-transfer-template"
+                                          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                          rows="3"
+                                          placeholder="أدخل نص التنبيه...">
+💸 تحويل كبير: تم تحويل {{amount}} ر.ي من {{from_branch}} إلى {{to_branch}} بواسطة {{user_name}}
+                                </textarea>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">قالب التقرير اليومي</label>
+                                <textarea id="daily-report-template"
+                                          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                          rows="3"
+                                          placeholder="أدخل نص التقرير...">
+📊 التقرير اليومي: إجمالي السيولة {{total_liquidity}} ر.ي، {{alerts_count}} تنبيهات نشطة، {{transactions_count}} معاملة
+                                </textarea>
+                            </div>
+                            
+                            <div class="text-right">
+                                <button onclick="previewNotification()"
+                                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                                    <i class="fas fa-eye ml-2"></i>
+                                    معاينة الإشعارات
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Schedule Settings -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6 lg:col-span-2">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-clock ml-3 text-green-600"></i>
+                            إعدادات الجدولة
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">التقارير اليومية</label>
+                                    <p class="text-sm text-gray-600">إرسال تقرير يومي تلقائي</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="daily-reports-enabled" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">توقيت التقرير اليومي</label>
+                                <input type="time" 
+                                       id="daily-report-schedule"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                       value="08:00">
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">التقارير الأسبوعية</label>
+                                    <p class="text-sm text-gray-600">إرسال تقرير أسبوعي تلقائي</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="weekly-reports-enabled" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">يوم التقرير الأسبوعي</label>
+                                <select id="weekly-report-day"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="0">الأحد</option>
+                                    <option value="1" selected>الاثنين</option>
+                                    <option value="2">الثلاثاء</option>
+                                    <option value="3">الأربعاء</option>
+                                    <option value="4">الخميس</option>
+                                    <option value="5">الجمعة</option>
+                                    <option value="6">السبت</option>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-center justify-between md:col-span-2">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">التنبؤات التلقائية</label>
+                                    <p class="text-sm text-gray-600">تشغيل نماذج الذكاء الاصطناعي تلقائيًا</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="auto-predictions-enabled" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Appearance Settings Tab -->
+            <div id="content-appearance" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Theme Settings -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-paint-brush ml-3 text-purple-600"></i>
+                            المظهر والثيم
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div>
+                                <label class="block text-gray-700 mb-3 font-medium">اختر الثيم</label>
+                                <div class="grid grid-cols-3 gap-3">
+                                    <div class="theme-preview cursor-pointer active"
+                                         onclick="selectTheme('blue')"
+                                         data-theme="blue">
+                                        <div class="h-20 bg-gradient-to-r from-blue-600 to-blue-800"></div>
+                                        <div class="p-3">
+                                            <p class="font-medium text-center">أزرق</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="theme-preview cursor-pointer"
+                                         onclick="selectTheme('green')"
+                                         data-theme="green">
+                                        <div class="h-20 bg-gradient-to-r from-green-600 to-green-800"></div>
+                                        <div class="p-3">
+                                            <p class="font-medium text-center">أخضر</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="theme-preview cursor-pointer"
+                                         onclick="selectTheme('purple')"
+                                         data-theme="purple">
+                                        <div class="h-20 bg-gradient-to-r from-purple-600 to-purple-800"></div>
+                                        <div class="p-3">
+                                            <p class="font-medium text-center">بنفسجي</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">اللون الرئيسي</label>
+                                <div class="flex space-x-3 space-x-reverse">
+                                    <div class="color-picker bg-blue-600 active" 
+                                         onclick="selectColor('blue')"
+                                         data-color="blue"></div>
+                                    <div class="color-picker bg-green-600" 
+                                         onclick="selectColor('green')"
+                                         data-color="green"></div>
+                                    <div class="color-picker bg-purple-600" 
+                                         onclick="selectColor('purple')"
+                                         data-color="purple"></div>
+                                    <div class="color-picker bg-red-600" 
+                                         onclick="selectColor('red')"
+                                         data-color="red"></div>
+                                    <div class="color-picker bg-yellow-600" 
+                                         onclick="selectColor('yellow')"
+                                         data-color="yellow"></div>
+                                    <div class="color-picker bg-gray-800" 
+                                         onclick="selectColor('dark')"
+                                         data-color="dark"></div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">نمط التصميم</label>
+                                <div class="flex space-x-3 space-x-reverse">
+                                    <button onclick="selectLayout('compact')"
+                                            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                                        مدمج
+                                    </button>
+                                    <button onclick="selectLayout('comfortable')"
+                                            class="px-4 py-2 border border-blue-500 text-blue-600 rounded-lg bg-blue-50">
+                                        مريح
+                                    </button>
+                                    <button onclick="selectLayout('spacious')"
+                                            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                                        فسيح
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">الوضع الداكن</label>
+                                    <p class="text-sm text-gray-600">تبديل الواجهة للوضع الداكن</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="dark-mode">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">الرسوم المتحركة</label>
+                                    <p class="text-sm text-gray-600">تفعيل الحركات والانتقالات</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="animations-enabled" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Dashboard Customization -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-tachometer-alt ml-3 text-blue-600"></i>
+                            تخصيص لوحة التحكم
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">العناصر الظاهرة</label>
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-gray-700">بطاقات الإحصائيات</span>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="show-stats-cards" checked>
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-gray-700">مخططات السيولة</span>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="show-charts" checked>
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-gray-700">آخر التنبيهات</span>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="show-recent-alerts" checked>
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-gray-700">الإجراءات السريعة</span>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="show-quick-actions" checked>
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-gray-700">مؤشر Basel III</span>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="show-basel-indicator" checked>
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">ترتيب العناصر</label>
+                                <div id="dashboard-items" class="space-y-2 p-3 bg-gray-50 rounded-lg">
+                                    <div class="flex items-center justify-between p-2 bg-white rounded border cursor-move" data-item="stats">
+                                        <span>📊 بطاقات الإحصائيات</span>
+                                        <i class="fas fa-grip-vertical text-gray-400"></i>
+                                    </div>
+                                    <div class="flex items-center justify-between p-2 bg-white rounded border cursor-move" data-item="charts">
+                                        <span>📈 مخططات السيولة</span>
+                                        <i class="fas fa-grip-vertical text-gray-400"></i>
+                                    </div>
+                                    <div class="flex items-center justify-between p-2 bg-white rounded border cursor-move" data-item="alerts">
+                                        <span>🚨 آخر التنبيهات</span>
+                                        <i class="fas fa-grip-vertical text-gray-400"></i>
+                                    </div>
+                                    <div class="flex items-center justify-between p-2 bg-white rounded border cursor-move" data-item="actions">
+                                        <span>⚡ الإجراءات السريعة</span>
+                                        <i class="fas fa-grip-vertical text-gray-400"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">عدد الفروع في الصفحة</label>
+                                <select id="branches-per-page"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="10">10 فروع</option>
+                                    <option value="25" selected>25 فرعًا</option>
+                                    <option value="50">50 فرعًا</option>
+                                    <option value="100">100 فرع</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Logo and Branding -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6 lg:col-span-2">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-image ml-3 text-green-600"></i>
+                            الشعار والهوية البصرية
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-gray-700 mb-3 font-medium">شعار النظام</label>
+                                <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer"
+                                     onclick="document.getElementById('logo-upload').click()">
+                                    <i class="fas fa-upload text-3xl text-gray-400 mb-4"></i>
+                                    <p class="font-semibold text-gray-700">انقر لرفع شعار جديد</p>
+                                    <p class="text-sm text-gray-600 mt-2">الحجم الموصى به: 200x200 بكسل</p>
+                                    <input type="file" id="logo-upload" class="hidden" accept="image/*">
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-3 font-medium">معاينة الشعار</label>
+                                <div class="flex items-center justify-center p-8 border border-gray-200 rounded-xl">
+                                    <div class="text-center">
+                                        <div class="w-32 h-32 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                                            <i class="fas fa-chart-line text-blue-600 text-4xl"></i>
+                                        </div>
+                                        <p class="font-bold text-gray-800">نظام السيولة الذكي</p>
+                                        <p class="text-sm text-gray-600">الإدارة والتنبؤ اللحظي</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">اسم المؤسسة</label>
+                                <input type="text" 
+                                       id="institution-name"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                       value="البنك السعودي الرائد">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">لون المؤسسة</label>
+                                <input type="color" 
+                                       id="institution-color"
+                                       class="w-full h-12 rounded-lg cursor-pointer"
+                                       value="#1e40af">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Integrations Settings Tab -->
+            <div id="content-integrations" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- API Settings -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-code ml-3 text-blue-600"></i>
+                            إعدادات API
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">تفعيل API</label>
+                                    <p class="text-sm text-gray-600">تمكين واجهة برمجة التطبيقات</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="api-enabled" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">مفتاح API الرئيسي</label>
+                                <div class="relative">
+                                    <input type="text" 
+                                           id="api-key"
+                                           class="w-full p-3 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition font-mono"
+                                           value="sk_live_xxxxxxxxxxxxxxxxxxxxxxxx"
+                                           readonly>
+                                    <button onclick="copyAPIKey()"
+                                            class="absolute left-3 top-3 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+                                        نسخ
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">معدل الحد (Rate Limit)</label>
+                                <select id="api-rate-limit"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="60">60 طلب/دقيقة</option>
+                                    <option value="120" selected>120 طلب/دقيقة</option>
+                                    <option value="300">300 طلب/دقيقة</option>
+                                    <option value="600">600 طلب/دقيقة</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">نطاق API المسموح (CORS)</label>
+                                <textarea id="api-cors"
+                                          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition font-mono"
+                                          rows="3"
+                                          placeholder="https://app.example.com">https://dashboard.bank.com
+https://admin.bank.com
+http://localhost:3000</textarea>
+                            </div>
+                            
+                            <div>
+                                <button onclick="regenerateAPIKey()"
+                                        class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center">
+                                    <i class="fas fa-key ml-2"></i>
+                                    إعادة إنشاء مفتاح API
+                                </button>
+                                <p class="text-sm text-gray-600 mt-2">سيتم تعطيل جميع المفاتيح القديمة</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- WebSocket Settings -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-bolt ml-3 text-yellow-600"></i>
+                            إعدادات WebSocket
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">الاتصال المباشر</label>
+                                    <p class="text-sm text-gray-600">تفعيل تحديثات الوقت الحقيقي</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="websocket-enabled" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">فترة التحديث</label>
+                                <select id="websocket-interval"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="5">5 ثواني</option>
+                                    <option value="10">10 ثواني</option>
+                                    <option value="30" selected>30 ثانية</option>
+                                    <option value="60">دقيقة واحدة</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">وقت انتهاء الاتصال</label>
+                                <select id="websocket-timeout"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="300">5 دقائق</option>
+                                    <option value="600" selected>10 دقائق</option>
+                                    <option value="1800">30 دقيقة</option>
+                                    <option value="3600">ساعة واحدة</option>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">إعادة الاتصال التلقائي</label>
+                                    <p class="text-sm text-gray-600">إعادة الاتصال عند فقدانه</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="websocket-reconnect" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="bg-blue-50 p-4 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-info-circle text-blue-600 ml-3"></i>
+                                    <div>
+                                        <p class="text-blue-800 font-medium">حالة الاتصال الحالية:</p>
+                                        <p class="text-sm text-blue-600">
+                                            <span id="websocket-status" class="font-bold text-green-600">متصل</span>
+                                            • آخر تحديث: <span id="last-update-time">ثواني قليلة</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- External Integrations -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6 lg:col-span-2">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-exchange-alt ml-3 text-green-600"></i>
+                            التكاملات الخارجية
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">تكامل SAP</label>
+                                    <p class="text-sm text-gray-600">ربط مع نظام SAP المالي</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="sap-integration">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">خادم SAP</label>
+                                <input type="text" 
+                                       id="sap-server"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                       placeholder="https://sap.example.com">
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">تكامل SWIFT</label>
+                                    <p class="text-sm text-gray-600">ربط مع شبكة SWIFT</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="swift-integration" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">معرف SWIFT</label>
+                                <input type="text" 
+                                       id="swift-id"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                       placeholder="BANKSAUDIXXX">
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">تكامل SAMA</label>
+                                    <p class="text-sm text-gray-600">ربط مع هيئة السوق المالية</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="sama-integration" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">رمز SAMA</label>
+                                <input type="text" 
+                                       id="sama-code"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                       placeholder="SAR001">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Backup Settings Tab -->
+            <div id="content-backup" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Backup Settings -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-download ml-3 text-blue-600"></i>
+                            النسخ الاحتياطي
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">النسخ التلقائي</label>
+                                    <p class="text-sm text-gray-600">إنشاء نسخ احتياطية تلقائية</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="auto-backup-enabled" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">توقيت النسخ اليومي</label>
+                                <input type="time" 
+                                       id="daily-backup-time"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                       value="02:00">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">فترة الاحتفاظ بالنسخ</label>
+                                <select id="backup-retention"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="7">أسبوع واحد</option>
+                                    <option value="30" selected>شهر واحد</option>
+                                    <option value="90">3 أشهر</option>
+                                    <option value="180">6 أشهر</option>
+                                    <option value="365">سنة واحدة</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">موقع التخزين</label>
+                                <select id="backup-storage"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="local" selected>الخادم المحلي</option>
+                                    <option value="s3">Amazon S3</option>
+                                    <option value="google">Google Cloud</option>
+                                    <option value="azure">Microsoft Azure</option>
+                                    <option value="ftp">خادم FTP</option>
+                                </select>
+                            </div>
+                            
+                            <div class="bg-blue-50 p-4 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-info-circle text-blue-600 ml-3"></i>
+                                    <div>
+                                        <p class="text-blue-800 font-medium">آخر نسخة احتياطية:</p>
+                                        <p class="text-sm text-blue-600" id="last-backup-time">أمس 02:00 صباحًا</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Manual Backup -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-hdd ml-3 text-green-600"></i>
+                            نسخ يدوية
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div class="backup-card rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 transition-colors"
+                                 onclick="createBackup()">
+                                <i class="fas fa-database text-4xl text-blue-600 mb-4"></i>
+                                <h4 class="font-bold text-gray-800 mb-2">إنشاء نسخة احتياطية الآن</h4>
+                                <p class="text-sm text-gray-600">نسخ كامل للبيانات والإعدادات</p>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                <button onclick="exportData('transactions')"
+                                        class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg border text-center">
+                                    <i class="fas fa-file-export text-green-600 text-xl mb-2"></i>
+                                    <p class="font-medium text-sm">تصدير المعاملات</p>
+                                </button>
+                                
+                                <button onclick="exportData('reports')"
+                                        class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg border text-center">
+                                    <i class="fas fa-chart-bar text-blue-600 text-xl mb-2"></i>
+                                    <p class="font-medium text-sm">تصدير التقارير</p>
+                                </button>
+                                
+                                <button onclick="exportData('settings')"
+                                        class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg border text-center">
+                                    <i class="fas fa-cog text-purple-600 text-xl mb-2"></i>
+                                    <p class="font-medium text-sm">تصدير الإعدادات</p>
+                                </button>
+                                
+                                <button onclick="exportData('users')"
+                                        class="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg border text-center">
+                                    <i class="fas fa-users text-yellow-600 text-xl mb-2"></i>
+                                    <p class="font-medium text-sm">تصدير المستخدمين</p>
+                                </button>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">استعادة من نسخة</label>
+                                <div class="relative">
+                                    <input type="file" 
+                                           id="restore-file"
+                                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                           accept=".backup,.json,.sql,.zip">
+                                    <button onclick="restoreBackup()"
+                                            class="absolute left-3 top-3 px-4 py-1.5 bg-green-600 text-white rounded hover:bg-green-700">
+                                        استعادة
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Backup History -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6 lg:col-span-2">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-history ml-3 text-gray-600"></i>
+                            سجل النسخ الاحتياطية
+                        </h3>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="py-3 px-4 text-right font-semibold text-gray-700">التاريخ</th>
+                                        <th class="py-3 px-4 text-right font-semibold text-gray-700">النوع</th>
+                                        <th class="py-3 px-4 text-right font-semibold text-gray-700">الحجم</th>
+                                        <th class="py-3 px-4 text-right font-semibold text-gray-700">الحالة</th>
+                                        <th class="py-3 px-4 text-right font-semibold text-gray-700">الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="backup-history">
+                                    <tr class="border-b hover:bg-gray-50">
+                                        <td class="py-3 px-4">اليوم 02:00</td>
+                                        <td class="py-3 px-4">تلقائي</td>
+                                        <td class="py-3 px-4">45.2 MB</td>
+                                        <td class="py-3 px-4">
+                                            <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                                مكتمل
+                                            </span>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <button onclick="downloadBackup(1)" class="text-blue-600 hover:text-blue-800 ml-3">
+                                                <i class="fas fa-download"></i>
+                                            </button>
+                                            <button onclick="deleteBackup(1)" class="text-red-600 hover:text-red-800">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr class="border-b hover:bg-gray-50">
+                                        <td class="py-3 px-4">أمس 02:00</td>
+                                        <td class="py-3 px-4">تلقائي</td>
+                                        <td class="py-3 px-4">44.8 MB</td>
+                                        <td class="py-3 px-4">
+                                            <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                                مكتمل
+                                            </span>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <button onclick="downloadBackup(2)" class="text-blue-600 hover:text-blue-800 ml-3">
+                                                <i class="fas fa-download"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr class="border-b hover:bg-gray-50">
+                                        <td class="py-3 px-4">قبل يومين 02:00</td>
+                                        <td class="py-3 px-4">تلقائي</td>
+                                        <td class="py-3 px-4">44.5 MB</td>
+                                        <td class="py-3 px-4">
+                                            <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                                مكتمل
+                                            </span>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <button onclick="downloadBackup(3)" class="text-blue-600 hover:text-blue-800 ml-3">
+                                                <i class="fas fa-download"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Advanced Settings Tab -->
+            <div id="content-advanced" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Performance Settings -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-tachometer-alt ml-3 text-green-600"></i>
+                            إعدادات الأداء
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">ذاكرة التخزين المؤقت</label>
+                                <select id="cache-size"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="64">64 MB</option>
+                                    <option value="128" selected>128 MB</option>
+                                    <option value="256">256 MB</option>
+                                    <option value="512">512 MB</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">مدة التخزين المؤقت</label>
+                                <select id="cache-duration"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="60">دقيقة واحدة</option>
+                                    <option value="300" selected>5 دقائق</option>
+                                    <option value="600">10 دقائق</option>
+                                    <option value="1800">30 دقيقة</option>
+                                    <option value="3600">ساعة واحدة</option>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">ضغط البيانات</label>
+                                    <p class="text-sm text-gray-600">ضغط الاستجابات لتحسين السرعة</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="compression-enabled" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">التخزين المؤقت للاستعلامات</label>
+                                    <p class="text-sm text-gray-600">تخزين نتائج الاستعلامات</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="query-caching" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-700">أداء النظام الحالي:</span>
+                                    <span class="font-bold text-green-600">ممتاز</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                                    <div class="h-2 rounded-full bg-green-500" style="width: 92%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Logging Settings -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-clipboard-list ml-3 text-yellow-600"></i>
+                            إعدادات السجلات
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">مستوى السجلات</label>
+                                <select id="log-level"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="DEBUG">تفصيلي (DEBUG)</option>
+                                    <option value="INFO">معلومات (INFO)</option>
+                                    <option value="WARNING" selected>تحذيرات (WARNING)</option>
+                                    <option value="ERROR">أخطاء (ERROR)</option>
+                                    <option value="CRITICAL">حرج (CRITICAL)</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">فترة الاحتفاظ بالسجلات</label>
+                                <select id="log-retention"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="7">أسبوع واحد</option>
+                                    <option value="30" selected>شهر واحد</option>
+                                    <option value="90">3 أشهر</option>
+                                    <option value="180">6 أشهر</option>
+                                    <option value="365">سنة واحدة</option>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">سجلات التدقيق</label>
+                                    <p class="text-sm text-gray-600">تسجيل جميع إجراءات المستخدمين</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="audit-logging" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">سجلات الأداء</label>
+                                    <p class="text-sm text-gray-600">تسجيل مقاييس أداء النظام</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="performance-logging">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div>
+                                <button onclick="downloadLogs()"
+                                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                                    <i class="fas fa-download ml-2"></i>
+                                    تحميل السجلات
+                                </button>
+                                <p class="text-sm text-gray-600 mt-2">تحميل سجلات آخر 7 أيام</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- System Information -->
+                    <div class="settings-card bg-white border border-gray-200 rounded-xl p-6 lg:col-span-2">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-info-circle ml-3 text-blue-600"></i>
+                            معلومات النظام
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-600 mb-1">إصدار النظام</p>
+                                <p class="font-bold text-gray-800">v2.1.0</p>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-600 mb-1">تاريخ البناء</p>
+                                <p class="font-bold text-gray-800">2024-01-15</p>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-600 mb-1">قاعدة البيانات</p>
+                                <p class="font-bold text-gray-800">SQLite 3.42.0</p>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-600 mb-1">الفروع المسجلة</p>
+                                <p class="font-bold text-gray-800">3 فروع</p>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-600 mb-1">المستخدمون النشطون</p>
+                                <p class="font-bold text-gray-800">5 مستخدمين</p>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-600 mb-1">المعاملات اليومية</p>
+                                <p class="font-bold text-gray-800">47 معاملة</p>
+                            </div>
+                            
+                            <div class="md:col-span-2 lg:col-span-3">
+                                <button onclick="runSystemDiagnostics()"
+                                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                                    <i class="fas fa-stethoscope ml-2"></i>
+                                    تشخيص النظام
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Dangerous Zone -->
+                    <div class="settings-card bg-white border border-red-200 rounded-xl p-6 lg:col-span-2">
+                        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center">
+                            <i class="fas fa-exclamation-triangle ml-3 text-red-600"></i>
+                            منطقة الخطر
+                        </h3>
+                        
+                        <div class="space-y-6">
+                            <div class="bg-red-50 p-4 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-exclamation-circle text-red-600 ml-3"></i>
+                                    <div>
+                                        <p class="text-red-800 font-bold">تحذير!</p>
+                                        <p class="text-sm text-red-600">هذه الإجراءات لا يمكن التراجع عنها وقد تؤدي إلى فقدان البيانات</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <button onclick="clearCache()"
+                                        class="p-4 bg-yellow-50 hover:bg-yellow-100 border border-yellow-200 rounded-lg text-center">
+                                    <i class="fas fa-broom text-yellow-600 text-xl mb-2"></i>
+                                    <p class="font-medium">مسح الذاكرة المؤقتة</p>
+                                </button>
+                                
+                                <button onclick="optimizeDatabase()"
+                                        class="p-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-center">
+                                    <i class="fas fa-database text-blue-600 text-xl mb-2"></i>
+                                    <p class="font-medium">تحسين قاعدة البيانات</p>
+                                </button>
+                                
+                                <button onclick="resetSettings()"
+                                        class="p-4 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg text-center">
+                                    <i class="fas fa-undo text-orange-600 text-xl mb-2"></i>
+                                    <p class="font-medium">إعادة ضبط الإعدادات</p>
+                                </button>
+                                
+                                <button onclick="purgeOldData()"
+                                        class="p-4 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg text-center">
+                                    <i class="fas fa-trash text-red-600 text-xl mb-2"></i>
+                                    <p class="font-medium">حذف البيانات القديمة</p>
+                                </button>
+                            </div>
+                            
+                            <div>
+                                <button onclick="showSystemResetModal()"
+                                        class="px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center justify-center w-full">
+                                    <i class="fas fa-bomb ml-2"></i>
+                                    إعادة تعيين النظام بالكامل
+                                </button>
+                                <p class="text-xs text-red-600 text-center mt-2">سيتم حذف جميع البيانات والإعدادات والعودة للحالة الأولية</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Reset Modal -->
+<div id="system-reset-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate__animated animate__zoomIn">
+        <div class="p-6">
+            <div class="text-center">
+                <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i class="fas fa-exclamation-triangle text-3xl text-red-600"></i>
+                </div>
+                
+                <h3 class="text-xl font-bold text-gray-800 mb-2">⚠️ تحذير: إعادة تعيين النظام</h3>
+                <p class="text-gray-600 mb-4">هذا الإجراء سيمحو جميع البيانات ولا يمكن التراجع عنه</p>
+                
+                <div class="bg-red-50 p-4 rounded-lg mb-6">
+                    <p class="text-red-700 font-medium mb-2">سيتم حذف:</p>
+                    <ul class="text-sm text-red-600 text-right space-y-1">
+                        <li>• جميع الفروع والمستخدمين</li>
+                        <li>• جميع المعاملات والسجلات</li>
+                        <li>• جميع الإعدادات والتكوينات</li>
+                        <li>• جميع التقارير والتنبؤات</li>
+                    </ul>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-gray-700 mb-2">اكتب "RESET" للتأكيد:</label>
+                    <input type="text" 
+                           id="reset-confirmation"
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-center font-mono"
+                           placeholder="RESET">
+                </div>
+                
+                <div class="flex space-x-3 space-x-reverse">
+                    <button onclick="closeSystemResetModal()"
+                            class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                        إلغاء
+                    </button>
+                    <button onclick="confirmSystemReset()"
+                            class="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+                            disabled>
+                        تأكيد الإعادة
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Modal -->
+<div id="settings-success-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate__animated animate__zoomIn">
+        <div class="p-6">
+            <div class="text-center">
+                <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i class="fas fa-check text-3xl text-green-600"></i>
+                </div>
+                
+                <h3 class="text-xl font-bold text-gray-800 mb-2" id="success-modal-title">تم الحفظ بنجاح</h3>
+                <p class="text-gray-600 mb-6" id="success-modal-message">تم حفظ الإعدادات بنجاح</p>
+                
+                <button onclick="closeSuccessModal()"
+                        class="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
+                    موافق
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initialize settings
+    let currentTab = 'general';
+    let selectedTheme = 'blue';
+    let selectedColor = 'blue';
+    let selectedLayout = 'comfortable';
+    
+    // Tab switching
+    function switchTab(tabName) {
+        // Hide all tab contents
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.add('hidden');
+        });
+        
+        // Remove active class from all tabs
+        document.querySelectorAll('.tab-button').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        // Show selected tab content
+        document.getElementById(`content-${tabName}`).classList.remove('hidden');
+        
+        // Activate selected tab
+        document.getElementById(`tab-${tabName}`).classList.add('active');
+        
+        currentTab = tabName;
+    }
+    
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Make dashboard items sortable
+        initSortableItems();
+        
+        // Update range values
+        updateLCRValue(100);
+        updateNSFRValue(100);
+        updateEarlyWarningValue(20);
+        
+        // Setup confirmation input
+        setupResetConfirmation();
+        
+        // Update WebSocket status
+        updateWebSocketStatus();
+        
+        // Initialize theme
+        selectTheme('blue');
+        selectColor('blue');
+    });
+    
+    // Update LCR value display
+    function updateLCRValue(value) {
+        document.getElementById('lcr-value').textContent = value + '%';
+        const color = value >= 100 ? 'text-green-600' : value >= 80 ? 'text-yellow-600' : 'text-red-600';
+        document.getElementById('lcr-value').className = `text-lg font-bold ${color}`;
+    }
+    
+    // Update NSFR value display
+    function updateNSFRValue(value) {
+        document.getElementById('nsfr-value').textContent = value + '%';
+        const color = value >= 100 ? 'text-green-600' : value >= 90 ? 'text-yellow-600' : 'text-red-600';
+        document.getElementById('nsfr-value').className = `text-lg font-bold ${color}`;
+    }
+    
+    // Update Early Warning value display
+    function updateEarlyWarningValue(value) {
+        document.getElementById('early-warning-value').textContent = value + '%';
+        const color = value >= 30 ? 'text-green-600' : value >= 20 ? 'text-yellow-600' : 'text-red-600';
+        document.getElementById('early-warning-value').className = `text-lg font-bold ${color}`;
+    }
+    
+    // Theme selection
+    function selectTheme(theme) {
+        selectedTheme = theme;
+        
+        // Update UI
+        document.querySelectorAll('.theme-preview').forEach(preview => {
+            preview.classList.remove('active');
+        });
+        
+        document.querySelector(`[data-theme="${theme}"]`).classList.add('active');
+        
+        // Apply theme (in real app, this would update CSS variables)
+        console.log(`Theme changed to: ${theme}`);
+    }
+    
+    // Color selection
+    function selectColor(color) {
+        selectedColor = color;
+        
+        // Update UI
+        document.querySelectorAll('.color-picker').forEach(picker => {
+            picker.classList.remove('active');
+        });
+        
+        document.querySelector(`[data-color="${color}"]`).classList.add('active');
+        
+        // Apply color (in real app, this would update CSS variables)
+        console.log(`Color changed to: ${color}`);
+    }
+    
+    // Layout selection
+    function selectLayout(layout) {
+        selectedLayout = layout;
+        
+        // Update UI
+        document.querySelectorAll('[onclick^="selectLayout"]').forEach(btn => {
+            btn.classList.remove('border-blue-500', 'text-blue-600', 'bg-blue-50');
+            btn.classList.add('border-gray-300', 'hover:bg-gray-50');
+        });
+        
+        event.target.classList.add('border-blue-500', 'text-blue-600', 'bg-blue-50');
+        event.target.classList.remove('border-gray-300', 'hover:bg-gray-50');
+        
+        console.log(`Layout changed to: ${layout}`);
+    }
+    
+    // Make dashboard items sortable
+    function initSortableItems() {
+        const container = document.getElementById('dashboard-items');
+        if (!container) return;
+        
+        // Simple drag and drop implementation
+        let dragged = null;
+        
+        container.querySelectorAll('[data-item]').forEach(item => {
+            item.setAttribute('draggable', 'true');
+            
+            item.addEventListener('dragstart', function(e) {
+                dragged = this;
+                setTimeout(() => {
+                    this.style.opacity = '0.4';
+                }, 0);
+            });
+            
+            item.addEventListener('dragend', function(e) {
+                setTimeout(() => {
+                    dragged.style.opacity = '';
+                    dragged = null;
+                }, 0);
+            });
+            
+            item.addEventListener('dragover', function(e) {
+                e.preventDefault();
+            });
+            
+            item.addEventListener('dragenter', function(e) {
+                e.preventDefault();
+                this.style.backgroundColor = '#f3f4f6';
+            });
+            
+            item.addEventListener('dragleave', function(e) {
+                this.style.backgroundColor = '';
+            });
+            
+            item.addEventListener('drop', function(e) {
+                e.preventDefault();
+                if (dragged && dragged !== this) {
+                    const allItems = Array.from(container.children);
+                    const draggedIndex = allItems.indexOf(dragged);
+                    const targetIndex = allItems.indexOf(this);
+                    
+                    if (draggedIndex < targetIndex) {
+                        this.after(dragged);
+                    } else {
+                        this.before(dragged);
+                    }
+                    
+                    // Save order
+                    saveDashboardOrder();
+                }
+                this.style.backgroundColor = '';
+            });
+        });
+    }
+    
+    // Save dashboard item order
+    function saveDashboardOrder() {
+        const items = Array.from(document.getElementById('dashboard-items').children);
+        const order = items.map(item => item.dataset.item);
+        console.log('Dashboard order saved:', order);
+        // In real app, save to server
+    }
+    
+    // Update WebSocket status
+    function updateWebSocketStatus() {
+        const statusElement = document.getElementById('websocket-status');
+        const timeElement = document.getElementById('last-update-time');
+        
+        if (Math.random() > 0.1) { // 90% chance connected
+            statusElement.textContent = 'متصل';
+            statusElement.className = 'font-bold text-green-600';
+            timeElement.textContent = 'ثواني قليلة';
+        } else {
+            statusElement.textContent = 'غير متصل';
+            statusElement.className = 'font-bold text-red-600';
+            timeElement.textContent = 'منذ 5 دقائق';
+        }
+        
+        // Update periodically
+        setTimeout(updateWebSocketStatus, 30000);
+    }
+    
+    // Copy API key
+    function copyAPIKey() {
+        const keyInput = document.getElementById('api-key');
+        keyInput.select();
+        keyInput.setSelectionRange(0, 99999);
+        
+        try {
+            navigator.clipboard.writeText(keyInput.value);
+            showToast('تم نسخ مفتاح API');
+        } catch (err) {
+            console.error('Failed to copy:', err);
+        }
+    }
+    
+    // Regenerate API key
+    function regenerateAPIKey() {
+        if (confirm('هل أنت متأكد من إعادة إنشاء مفتاح API؟ سيتم تعطيل جميع المفاتيح القديمة.')) {
+            // Generate new key
+            const newKey = 'sk_live_' + Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+            document.getElementById('api-key').value = newKey;
+            
+            showSuccess('تم إنشاء مفتاح API جديد', 'سيتم تفعيل المفتاح الجديد فورًا.');
+        }
+    }
+    
+    // Rotate encryption keys
+    function rotateEncryptionKeys() {
+        if (confirm('هل تريد تدوير مفاتيح التشفير؟ هذه العملية قد تستغرق عدة دقائق.')) {
+            // Show loading
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري التدوير...';
+            btn.disabled = true;
+            
+            // Simulate rotation
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                showSuccess('تم تدوير المفاتيح', 'تم إنشاء مفاتيح تشفير جديدة بنجاح.');
+            }, 3000);
+        }
+    }
+    
+    // Preview notification
+    function previewNotification() {
+        const template = document.getElementById('low-liquidity-template').value;
+        alert('معاينة التنبيه:\n\n' + template.replace(/\{\{.*?\}\}/g, '[بيانات]'));
+    }
+    
+    // Backup functions
+    function createBackup() {
+        const btn = event?.target?.closest('button') || event?.target?.closest('.backup-card');
+        if (!btn) return;
+        
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري النسخ...';
+        
+        // Simulate backup creation
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            showSuccess('تم إنشاء النسخة الاحتياطية', 'تم حفظ النسخة بنجاح في الخادم المحلي.');
+            updateLastBackupTime();
+        }, 2000);
+    }
+    
+    function updateLastBackupTime() {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'});
+        document.getElementById('last-backup-time').textContent = `اليوم ${timeStr}`;
+    }
+    
+    function exportData(type) {
+        const types = {
+            'transactions': 'المعاملات',
+            'reports': 'التقارير',
+            'settings': 'الإعدادات',
+            'users': 'المستخدمين'
+        };
+        
+        // Create download link
+        const link = document.createElement('a');
+        link.href = '#';
+        link.download = `export_${type}_${new Date().toISOString().split('T')[0]}.json`;
+        link.click();
+        
+        showSuccess('تم التصدير', `تم تصدير ${types[type]} بنجاح.`);
+    }
+    
+    function restoreBackup() {
+        const fileInput = document.getElementById('restore-file');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            alert('يرجى اختيار ملف النسخة الاحتياطية');
+            return;
+        }
+        
+        if (confirm('تحذير: استعادة النسخة الاحتياطية ستستبدل جميع البيانات الحالية. هل أنت متأكد؟')) {
+            // Simulate restore
+            showSuccess('جاري الاستعادة', 'ستستغرق العملية عدة دقائق...');
+        }
+    }
+    
+    function downloadBackup(id) {
+        // Simulate download
+        const link = document.createElement('a');
+        link.href = '#';
+        link.download = `backup_${id}_${new Date().toISOString().split('T')[0]}.zip`;
+        link.click();
+        
+        showToast('جاري تحميل النسخة الاحتياطية...');
+    }
+    
+    function deleteBackup(id) {
+        if (confirm('هل تريد حذف هذه النسخة الاحتياطية؟')) {
+            // Simulate deletion
+            const row = event.target.closest('tr');
+            row.style.opacity = '0.5';
+            
+            setTimeout(() => {
+                row.remove();
+                showToast('تم حذف النسخة الاحتياطية');
+            }, 500);
+        }
+    }
+    
+    // Advanced functions
+    function downloadLogs() {
+        // Simulate download
+        const link = document.createElement('a');
+        link.href = '#';
+        link.download = `system_logs_${new Date().toISOString().split('T')[0]}.zip`;
+        link.click();
+        
+        showSuccess('تم تحميل السجلات', 'تم حفظ ملف السجلات بنجاح.');
+    }
+    
+    function runSystemDiagnostics() {
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري التشخيص...';
+        btn.disabled = true;
+        
+        // Simulate diagnostics
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            showSuccess('اكتمل التشخيص', 'جميع الأنظمة تعمل بشكل طبيعي.');
+        }, 3000);
+    }
+    
+    // Dangerous zone functions
+    function clearCache() {
+        if (confirm('هل تريد مسح الذاكرة المؤقتة؟')) {
+            // Simulate cache clearing
+            showSuccess('تم مسح الذاكرة المؤقتة', 'سيتم تحسين أداء النظام.');
+        }
+    }
+    
+    function optimizeDatabase() {
+        if (confirm('هل تريد تحسين قاعدة البيانات؟ قد تستغرق العملية عدة دقائق.')) {
+            const btn = event.target;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                showSuccess('تم تحسين قاعدة البيانات', 'تحسن الأداء بنسبة 15%.');
+            }, 2000);
+        }
+    }
+    
+    function resetSettings() {
+        if (confirm('هل تريد إعادة ضبط جميع الإعدادات إلى القيم الافتراضية؟')) {
+            // Reload page to reset settings
+            location.reload();
+        }
+    }
+    
+    function purgeOldData() {
+        if (confirm('هل تريد حذف البيانات القديمة (أكثر من سنة)؟ لا يمكن التراجع عن هذا الإجراء.')) {
+            showSuccess('جاري الحذف', 'سيتم حذف البيانات القديمة...');
+        }
+    }
+    
+    // System reset functions
+    function showSystemResetModal() {
+        document.getElementById('system-reset-modal').classList.remove('hidden');
+    }
+    
+    function closeSystemResetModal() {
+        document.getElementById('system-reset-modal').classList.add('hidden');
+        document.getElementById('reset-confirmation').value = '';
+        updateResetButton();
+    }
+    
+    function setupResetConfirmation() {
+        const input = document.getElementById('reset-confirmation');
+        const button = document.querySelector('#system-reset-modal button[onclick="confirmSystemReset()"]');
+        
+        input.addEventListener('input', function() {
+            updateResetButton();
+        });
+    }
+    
+    function updateResetButton() {
+        const input = document.getElementById('reset-confirmation');
+        const button = document.querySelector('#system-reset-modal button[onclick="confirmSystemReset()"]');
+        
+        if (input.value.toUpperCase() === 'RESET') {
+            button.disabled = false;
+            button.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            button.disabled = true;
+            button.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    }
+    
+    function confirmSystemReset() {
+        if (document.getElementById('reset-confirmation').value.toUpperCase() !== 'RESET') {
+            return;
+        }
+        
+        if (confirm('⚠️ تحذير نهائي: هذا سيمحو النظام بالكامل. هل أنت متأكد تمامًا؟')) {
+            // Show loading
+            const button = document.querySelector('#system-reset-modal button[onclick="confirmSystemReset()"]');
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+            button.disabled = true;
+            
+            // Simulate reset
+            setTimeout(() => {
+                closeSystemResetModal();
+                alert('✅ تم إعادة تعيين النظام بنجاح. سيتم إعادة التوجيه...');
+                // In real app, redirect to setup page
+                // location.href = '/setup';
+            }, 3000);
+        }
+    }
+    
+    // Save all settings
+    function saveAllSettings() {
+        // Collect all settings
+        const settings = {
+            general: {
+                systemName: document.getElementById('system-name').value,
+                timezone: document.getElementById('timezone').value,
+                language: document.getElementById('language').value,
+                currency: document.getElementById('currency').value,
+                maintenanceMode: document.getElementById('maintenance-mode').checked,
+                lcrThreshold: document.getElementById('lcr-threshold').value,
+                nsfrThreshold: document.getElementById('nsfr-threshold').value,
+                earlyWarning: document.getElementById('early-warning').value,
+                autoCompliance: document.getElementById('auto-compliance').checked,
+                defaultMinLiquidity: document.getElementById('default-min-liquidity').value,
+                defaultMaxLiquidity: document.getElementById('default-max-liquidity').value,
+                updateInterval: document.getElementById('liquidity-update-interval').value,
+                dailyReportTime: document.getElementById('daily-report-time').value
+            },
+            security: {
+                twoFactorEnabled: document.getElementById('2fa-enabled').checked,
+                sessionTimeout: document.getElementById('session-timeout').value,
+                maxLoginAttempts: document.getElementById('max-login-attempts').value,
+                userActivityLogging: document.getElementById('user-activity-logging').checked,
+                encryptionAlgorithm: document.getElementById('encryption-algorithm').value,
+                keyRotation: document.getElementById('key-rotation').value,
+                dbEncryption: document.getElementById('db-encryption').checked
+            },
+            // ... collect more settings
+        };
+        
+        console.log('Saving settings:', settings);
+        
+        // Show success message
+        showSuccess('تم حفظ الإعدادات', 'تم حفظ جميع الإعدادات بنجاح.');
+    }
+    
+    // Restore defaults
+    function restoreDefaults() {
+        if (confirm('هل تريد استعادة جميع الإعدادات إلى القيم الافتراضية؟')) {
+            // In real app, this would reset to default values
+            location.reload();
+        }
+    }
+    
+    // Show success modal
+    function showSuccess(title, message) {
+        document.getElementById('success-modal-title').textContent = title;
+        document.getElementById('success-modal-message').textContent = message;
+        document.getElementById('settings-success-modal').classList.remove('hidden');
+    }
+    
+    function closeSuccessModal() {
+        document.getElementById('settings-success-modal').classList.add('hidden');
+    }
+    
+    // Show toast notification
+    function showToast(message) {
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = 'fixed bottom-4 left-4 z-50 p-4 bg-gray-800 text-white rounded-lg shadow-xl animate__animated animate__fadeInUp';
+        toast.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-check-circle ml-3 text-green-400"></i>
+                <span>${message}</span>
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            toast.classList.add('animate__fadeOutDown');
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.remove();
+                }
+            }, 500);
+        }, 3000);
+    }
+    
+    // Close modals when clicking outside
+    document.getElementById('system-reset-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeSystemResetModal();
+        }
+    });
+    
+    document.getElementById('settings-success-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeSuccessModal();
+        }
+    });
+</script>
+{% endblock %}

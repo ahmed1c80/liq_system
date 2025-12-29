@@ -1,0 +1,693 @@
+{% extends "base.html" %}
+
+{% block title %}تفاصيل الفرع - {{ branch.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Custom styles for branch details */
+    .stat-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    }
+    
+    .chart-container {
+        height: 300px;
+        position: relative;
+    }
+    
+    .progress-ring {
+        transform: rotate(-90deg);
+    }
+    
+    .progress-ring-circle {
+        stroke-linecap: round;
+        transition: stroke-dashoffset 0.5s ease;
+    }
+    
+    .timeline-item {
+        position: relative;
+        padding-right: 2rem;
+        border-right: 2px solid #e5e7eb;
+    }
+    
+    .timeline-item:last-child {
+        border-right: none;
+    }
+    
+    .timeline-dot {
+        position: absolute;
+        right: -0.5rem;
+        top: 0;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        border: 2px solid white;
+    }
+    
+    /* Animation for progress bars */
+    @keyframes fillProgress {
+        from {
+            width: 0%;
+        }
+        to {
+            width: var(--target-width);
+        }
+    }
+    
+    .animated-progress {
+        animation: fillProgress 1s ease-out forwards;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+        {% set recent_record = liquidity_history[0] if liquidity_history else None %}
+<div class="animate__animated animate__fadeIn">
+    <!-- Breadcrumb -->
+    <nav class="mb-6">
+        <ol class="flex items-center space-x-2 space-x-reverse text-sm text-gray-600">
+            <li>
+                <a href="{{ url_for('dashboard') }}" class="hover:text-blue-600 transition-colors">
+                    <i class="fas fa-home ml-2"></i>
+                    الرئيسية
+                </a>
+            </li>
+            <li>
+                <i class="fas fa-chevron-left"></i>
+            </li>
+            <li class="text-blue-600 font-medium">
+                {{ branch.name }}
+            </li>
+        </ol>
+    </nav>
+
+    <!-- Branch Header -->
+     {% include 'dashboard/inc_branch/header.html'%}
+  
+    
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column: Charts and Predictions -->
+       {% include 'dashboard/inc_branch/charts.html'%}
+  
+        
+        <!-- Right Column: Transactions and Alerts -->
+      {% include 'dashboard/inc_branch/transactions.html'%}
+  
+    </div>
+</div>
+    {% include 'dashboard/inc_branch/modal.html'%}
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    // Global variables
+    let branchId = {{ branch.id }};
+    let liquidityChart = null;
+    
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadChartData('30d');
+        loadPredictions();
+        loadOtherBranches();
+        
+        // Set custom property for progress animation
+        document.querySelector('.animated-progress')?.style.setProperty(
+            '--target-width', 
+            document.querySelector('.animated-progress')?.style.width || '0%'
+        );
+    });
+    
+    // Load chart data
+    function loadChartData(range) {
+        // Show loading
+        const container = document.querySelector('.chart-container');
+        if (container) {
+            container.innerHTML = '<div class="flex items-center justify-center h-full"><div class="loader"></div></div>';
+        }
+        
+        // Simulate API call
+        setTimeout(() => {
+            renderLiquidityChart(range);
+        }, 500);
+    }
+    
+    // Render liquidity chart
+    function renderLiquidityChart(range) {
+        const ctx = document.getElementById('liquidityChart');
+        if (!ctx) return;
+        
+        // Destroy existing chart
+        if (liquidityChart) {
+            liquidityChart.destroy();
+        }
+        
+        // Sample data based on range
+        let labels = [];
+        let data = [];
+        let minLiquidity = [];
+        
+        if (range === '7d') {
+            labels = ['يوم 1', 'يوم 2', 'يوم 3', 'يوم 4', 'يوم 5', 'يوم 6', 'اليوم'];
+            data = [4500000, 4200000, 4800000, 4600000, 4400000, 4300000, {{ recent_record.current_liquidity if recent_record else 0 }}];
+            minLiquidity = Array(7).fill({{ branch.min_liquidity }});
+        } else if (range === '30d') {
+            labels = ['أسبوع 1', 'أسبوع 2', 'أسبوع 3', 'أسبوع 4'];
+            data = [4200000, 4500000, 4300000, {{ recent_record.current_liquidity if recent_record else 0 }}];
+            minLiquidity = Array(4).fill({{ branch.min_liquidity }});
+        } else {
+            labels = ['شهر 1', 'شهر 2', 'شهر 3'];
+            data = [4000000, 4200000, {{ recent_record.current_liquidity if recent_record else 0 }}];
+            minLiquidity = Array(3).fill({{ branch.min_liquidity }});
+        }
+        
+        // Create chart
+        liquidityChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'السيولة الفعلية',
+                        data: data,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'الحد الأدنى المطلوب',
+                        data: minLiquidity,
+                        borderColor: '#f59e0b',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: false,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        rtl: true,
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20,
+                            font: {
+                                family: 'system-ui, -apple-system, sans-serif'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        rtl: true,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                label += context.parsed.y.toLocaleString('ar-SA') + ' ر.ي';
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString('ar-SA') + ' ر.ي';
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+    }
+    
+    // Load predictions
+    async function loadPredictions() {
+        const container = document.getElementById('predictions-container');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <div class="loader mx-auto"></div>
+                <p class="mt-4 text-gray-600">جاري تحميل التنبؤات...</p>
+            </div>
+        `;
+        
+        try {
+            const response = await fetch(`/api/predict/${branchId}`);
+            const data = await response.json();
+            
+            if (data.predictions) {
+                let html = `
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between mb-6">
+                            <h4 class="font-bold text-gray-800">التنبؤات للـ7 أيام القادمة</h4>
+                            <span class="text-sm text-gray-600">نموذج الذكاء الاصطناعي</span>
+                        </div>
+                `;
+                
+                data.predictions.forEach((pred, index) => {
+                    const date = data.dates ? data.dates[index] : `اليوم ${index + 1}`;
+                    const historical = data.historical?.[index] || 0;
+                    const change = historical ? ((pred - historical) / historical * 100).toFixed(1) : 0;
+                    const changeClass = change >= 0 ? 'text-green-600' : 'text-red-600';
+                    const changeIcon = change >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
+                    const progress = Math.min(Math.max((pred / {{ branch.max_liquidity }}) * 100, 0), 100);
+                    
+                    html += `
+                        <div class="p-4 bg-gray-50 rounded-lg">
+                            <div class="flex justify-between items-center mb-3">
+                                <div>
+                                    <p class="font-medium text-gray-800">${date}</p>
+                                    <p class="text-sm text-gray-600">${historical.toFixed(2)} ر.ي (المعدل التاريخي)</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-bold text-lg text-blue-700">${pred.toFixed(2)} ر.ي</p>
+                                    <p class="text-sm ${changeClass}">
+                                        <i class="fas ${changeIcon} ml-1"></i>
+                                        ${Math.abs(change)}%
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="h-2 rounded-full 
+                                    ${progress > 80 ? 'bg-red-500' : progress > 60 ? 'bg-yellow-500' : 'bg-green-500'}" 
+                                    style="width: ${progress}%">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                        <div class="mt-6 p-4 bg-blue-50 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-lightbulb text-blue-600 ml-3 text-xl"></i>
+                                <div>
+                                    <p class="font-medium text-blue-800">توصية النظام</p>
+                                    <p class="text-sm text-blue-600">
+                                        {% if recent_record and recent_record.current_liquidity < branch.min_liquidity %}
+                                        يوصي النظام بتحويل أموال إلى هذا الفرع لرفع السيولة فوق الحد الأدنى
+                                        {% else %}
+                                        السيولة الحالية ضمن المستويات الآمنة، لا توجد توصيات عاجلة
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.innerHTML = html;
+            } else if (data.error) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-exclamation-circle text-3xl mb-4 text-yellow-500"></i>
+                        <p>${data.error}</p>
+                        <p class="text-sm mt-2">لا توجد بيانات كافية للتنبؤ</p>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading predictions:', error);
+            container.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <i class="fas fa-exclamation-triangle text-3xl mb-4 text-red-500"></i>
+                    <p>خطأ في تحميل التنبؤات</p>
+                    <p class="text-sm mt-2">يرجى المحاولة مرة أخرى</p>
+                </div>
+            `;
+        }
+    }
+    
+    // Load other branches for transfer
+    async function loadOtherBranches() {
+        try {
+            const response = await fetch('/api/branches');
+            const data = await response.json();
+            
+            if (data.branches) {
+                const select = document.querySelector('select[name="to_branch"]');
+                if (select) {
+                    // Clear existing options except the first one
+                    while (select.options.length > 1) {
+                        select.remove(1);
+                    }
+                    
+                    // Add other branches
+                    data.branches.forEach(branch => {
+                        if (branch.id !== branchId) {
+                            const option = document.createElement('option');
+                            option.value = branch.id;
+                            option.textContent = branch.name;
+                            select.appendChild(option);
+                        }
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error loading branches:', error);
+        }
+    }
+    
+    // Show transfer modal
+    function showTransferModal(sourceBranchId = null) {
+        const modal = document.getElementById('transfer-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            
+            if (sourceBranchId) {
+                modal.querySelector('input[name="from_branch"]').value = sourceBranchId;
+            }
+        }
+    }
+    
+    function closeTransferModal() {
+        document.getElementById('transfer-modal').classList.add('hidden');
+        document.getElementById('transfer-form').reset();
+    }
+    
+    // Handle transfer form submission
+    document.getElementById('transfer-form')?.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            from_branch: parseInt(this.from_branch.value),
+            to_branch: parseInt(this.to_branch.value),
+            amount: parseFloat(this.amount.value)
+        };
+        
+        // Validation
+        if (!formData.to_branch) {
+            alert('يرجى اختيار الفرع المستلم');
+            return;
+        }
+        
+        if (formData.from_branch === formData.to_branch) {
+            alert('لا يمكن التحويل لنفس الفرع');
+            return;
+        }
+        
+        if (!formData.amount || formData.amount <= 0) {
+            alert('يرجى إدخال مبلغ صحيح');
+            return;
+        }
+        
+        const maxAmount = parseFloat(this.amount.max);
+        if (formData.amount > maxAmount) {
+            alert(`المبلغ يتجاوز السيولة المتاحة (${maxAmount.toLocaleString('ar-SA')} ر.ي)`);
+            return;
+        }
+        
+        // Show loading
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await fetch('/api/transfer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                alert('✅ تم التحويل بنجاح');
+                closeTransferModal();
+                
+                // Refresh page after delay
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                alert(result.error || 'حدث خطأ أثناء التحويل');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('خطأ في الاتصال بالخادم');
+        } finally {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+    
+    // Show forecast modal
+    function showForecastModal() {
+        const modal = document.getElementById('forecast-modal');
+        const content = document.getElementById('detailed-forecast-content');
+        
+        if (modal && content) {
+            content.innerHTML = `
+                <div class="text-center py-8">
+                    <div class="loader mx-auto"></div>
+                    <p class="mt-4 text-gray-600">جاري تحميل التنبؤات التفصيلية...</p>
+                </div>
+            `;
+            
+            modal.classList.remove('hidden');
+            
+            // Load detailed forecast
+            setTimeout(() => {
+                loadDetailedForecast();
+            }, 500);
+        }
+    }
+    
+    function closeForecastModal() {
+        document.getElementById('forecast-modal').classList.add('hidden');
+    }
+    
+    // Load detailed forecast
+    async function loadDetailedForecast() {
+        const content = document.getElementById('detailed-forecast-content');
+        if (!content) return;
+        
+        try {
+            const response = await fetch(`/api/predict/${branchId}`);
+            const data = await response.json();
+            
+            if (data.predictions) {
+                let html = `
+                    <div class="mb-6">
+                        <h4 class="font-bold text-xl text-gray-800 mb-2">تحليل تنبؤات السيولة</h4>
+                        <p class="text-gray-600">بناءً على البيانات التاريخية ونماذج الذكاء الاصطناعي</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-blue-50 p-6 rounded-xl">
+                            <div class="flex items-center mb-4">
+                                <i class="fas fa-chart-line text-blue-600 text-2xl ml-3"></i>
+                                <h5 class="font-bold text-gray-800">الاتجاه العام</h5>
+                            </div>
+                            <p class="text-gray-700 mb-3">
+                `;
+                
+                const lastPrediction = data.predictions[data.predictions.length - 1];
+                const firstPrediction = data.predictions[0];
+                const trend = lastPrediction - firstPrediction;
+                
+                if (trend > 0) {
+                    html += `
+                        <span class="text-green-600 font-semibold">اتجاه صعودي:</span>
+                        من المتوقع زيادة السيولة بنسبة ${((trend / firstPrediction) * 100).toFixed(1)}% خلال الأسبوع القادم.
+                    `;
+                } else if (trend < 0) {
+                    html += `
+                        <span class="text-red-600 font-semibold">اتجاه هبوطي:</span>
+                        من المتوقع انخفاض السيولة بنسبة ${Math.abs((trend / firstPrediction) * 100).toFixed(1)}% خلال الأسبوع القادم.
+                    `;
+                } else {
+                    html += `
+                        <span class="text-gray-600 font-semibold">اتجاه مستقر:</span>
+                        من المتابق أن تبقى السيولة عند مستوياتها الحالية.
+                    `;
+                }
+                
+                html += `
+                            </p>
+                        </div>
+                        
+                        <div class="bg-purple-50 p-6 rounded-xl">
+                            <div class="flex items-center mb-4">
+                                <i class="fas fa-robot text-purple-600 text-2xl ml-3"></i>
+                                <h5 class="font-bold text-gray-800">مستوى الثقة</h5>
+                            </div>
+                            <div class="mb-3">
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span>دقة النموذج</span>
+                                    <span class="font-bold">92%</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-purple-500 h-2 rounded-full" style="width: 92%"></div>
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-600">
+                                يعتمد النموذج على خوارزمية الانحدار الخطي مع تحليل السلاسل الزمنية
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="py-3 px-4 text-right font-semibold text-gray-700">اليوم</th>
+                                    <th class="py-3 px-4 text-right font-semibold text-gray-700">التنبؤ</th>
+                                    <th class="py-3 px-4 text-right font-semibold text-gray-700">التغير</th>
+                                    <th class="py-3 px-4 text-right font-semibold text-gray-700">المستوى</th>
+                                    <th class="py-3 px-4 text-right font-semibold text-gray-700">التوصية</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                data.predictions.forEach((pred, index) => {
+                    const date = data.dates ? data.dates[index] : `اليوم ${index + 1}`;
+                    const historical = data.historical?.[index] || 0;
+                    const change = historical ? ((pred - historical) / historical * 100).toFixed(1) : 0;
+                    const changeClass = change >= 0 ? 'text-green-600' : 'text-red-600';
+                    const changeIcon = change >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
+                    const level = pred / {{ branch.max_liquidity }} * 100;
+                    
+                    let recommendation = '';
+                    let recColor = 'text-gray-600';
+                    
+                    if (pred < {{ branch.min_liquidity }}) {
+                        recommendation = 'تحويل أموال عاجل';
+                        recColor = 'text-red-600';
+                    } else if (pred < {{ branch.min_liquidity }} * 1.2) {
+                        recommendation = 'مراقبة عن كثب';
+                        recColor = 'text-yellow-600';
+                    } else {
+                        recommendation = 'مستوى آمن';
+                        recColor = 'text-green-600';
+                    }
+                    
+                    html += `
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="py-3 px-4 font-medium">${date}</td>
+                            <td class="py-3 px-4 font-bold">${pred.toFixed(2)} ر.ي</td>
+                            <td class="py-3 px-4 ${changeClass}">
+                                <i class="fas ${changeIcon} ml-1"></i>
+                                ${Math.abs(change)}%
+                            </td>
+                            <td class="py-3 px-4">
+                                <div class="w-24">
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div class="h-2 rounded-full 
+                                            ${level > 80 ? 'bg-red-500' : level > 60 ? 'bg-yellow-500' : 'bg-green-500'}" 
+                                            style="width: ${level}%">
+                                        </div>
+                                    </div>
+                                    <div class="text-xs text-gray-500 mt-1 text-center">${level.toFixed(1)}%</div>
+                                </div>
+                            </td>
+                            <td class="py-3 px-4 ${recColor} font-medium">${recommendation}</td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-8 pt-6 border-t">
+                        <div class="flex justify-end">
+                            <button onclick="closeForecastModal()"
+                                    class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
+                                إغلاق
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                content.innerHTML = html;
+            }
+        } catch (error) {
+            console.error('Error loading detailed forecast:', error);
+            content.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <i class="fas fa-exclamation-triangle text-3xl mb-4 text-red-500"></i>
+                    <p>خطأ في تحميل التنبؤات التفصيلية</p>
+                    <p class="text-sm mt-2">يرجى المحاولة مرة أخرى</p>
+                </div>
+            `;
+        }
+    }
+    
+    // Generate branch report
+    function generateBranchReport(branchId) {
+        const btn = event?.target?.closest('button') || event?.target;
+        if (btn) {
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الإنشاء...';
+            btn.disabled = true;
+            
+            // Simulate report generation
+            setTimeout(() => {
+                // Create download link
+                const link = document.createElement('a');
+                link.href = '#';
+                link.download = `تقرير_الفرع_${branchId}_${new Date().toISOString().split('T')[0]}.pdf`;
+                link.click();
+                
+                // Restore button
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                
+                // Show success message
+                alert('✅ تم إنشاء تقرير الفرع بنجاح');
+            }, 2000);
+        }
+    }
+    
+    // Show settings modal
+    function showSettingsModal(branchId) {
+        alert('إعدادات الفرع قريباً...');
+    }
+    
+    // Close modals when clicking outside
+    document.getElementById('transfer-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeTransferModal();
+        }
+    });
+    
+    document.getElementById('forecast-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeForecastModal();
+        }
+    });
+</script>
+{% endblock %}

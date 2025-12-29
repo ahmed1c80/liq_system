@@ -1,0 +1,986 @@
+{% extends "base.html" %}
+
+{% block title %}إدارة المستخدمين{% endblock %}
+
+{% block extra_css %}
+<style>
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+    }
+    
+    .role-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .role-admin {
+        background-color: #dc2626;
+        color: white;
+    }
+    
+    .role-manager {
+        background-color: #2563eb;
+        color: white;
+    }
+    
+    .role-auditor {
+        background-color: #059669;
+        color: white;
+    }
+    
+    .status-active {
+        background-color: #10b981;
+        color: white;
+    }
+    
+    .status-inactive {
+        background-color: #6b7280;
+        color: white;
+    }
+    
+    .action-btn {
+        padding: 0.5rem;
+        border-radius: 0.375rem;
+        transition: all 0.2s;
+    }
+    
+    .action-btn:hover {
+        transform: translateY(-1px);
+    }
+    
+    .user-card {
+        transition: all 0.3s ease;
+    }
+    
+    .user-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Modal animations */
+    .modal-enter {
+        animation: modalEnter 0.3s ease-out;
+    }
+    
+    @keyframes modalEnter {
+        from {
+            opacity: 0;
+            transform: scale(0.9);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate__animated animate__fadeIn">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">إدارة المستخدمين</h1>
+                <p class="text-gray-600">إدارة حسابات المستخدمين والصلاحيات في النظام</p>
+            </div>
+            
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <button onclick="exportUsers()" 
+                        class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center">
+                    <i class="fas fa-file-export ml-2"></i>
+                    <span>تصدير</span>
+                </button>
+                
+                <button onclick="showAddUserModal()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                    <i class="fas fa-user-plus ml-2"></i>
+                    <span>مستخدم جديد</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">إجمالي المستخدمين</p>
+                    <h3 class="text-2xl font-bold text-gray-800">{{ users|length }}</h3>
+                </div>
+                <div class="bg-blue-100 p-3 rounded-lg">
+                    <i class="fas fa-users text-blue-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">المستخدمون النشطون</p>
+                    <h3 class="text-2xl font-bold text-green-600">
+                        {{ users|selectattr('is_active', 'equalto', true)|list|length }}
+                    </h3>
+                </div>
+                <div class="bg-green-100 p-3 rounded-lg">
+                    <i class="fas fa-user-check text-green-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">مديرو النظام</p>
+                    <h3 class="text-2xl font-bold text-red-600">
+                        {{ users|selectattr('role', 'equalto', 'admin')|list|length }}
+                    </h3>
+                </div>
+                <div class="bg-red-100 p-3 rounded-lg">
+                    <i class="fas fa-user-shield text-red-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">مديرو الفروع</p>
+                    <h3 class="text-2xl font-bold text-blue-600">
+                        {{ users|selectattr('role', 'equalto', 'manager')|list|length }}
+                    </h3>
+                </div>
+                <div class="bg-blue-100 p-3 rounded-lg">
+                    <i class="fas fa-user-tie text-blue-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Search and Filters -->
+    <div class="bg-white rounded-xl shadow mb-6 p-5">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-gray-700 mb-2 font-medium">بحث</label>
+                <div class="relative">
+                    <input type="text" 
+                           id="search-users"
+                           placeholder="ابحث باسم مستخدم أو بريد إلكتروني..."
+                           class="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-gray-700 mb-2 font-medium">الدور</label>
+                <select id="filter-role" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    <option value="all">جميع الأدوار</option>
+                    <option value="admin">مدير النظام</option>
+                    <option value="manager">مدير فرع</option>
+                    <option value="auditor">مراجع</option>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-gray-700 mb-2 font-medium">الحالة</label>
+                <select id="filter-status" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    <option value="all">جميع الحالات</option>
+                    <option value="active">نشط فقط</option>
+                    <option value="inactive">غير نشط</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Users Table -->
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+        <div class="p-5 border-b border-gray-200">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <h2 class="text-xl font-bold text-gray-800">قائمة المستخدمين</h2>
+                
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="text-sm text-gray-600">
+                        <span id="user-count">{{ users|length }}</span> مستخدم
+                    </div>
+                    
+                    <button onclick="refreshUsers()" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Desktop Table -->
+        <div class="hidden md:block overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">المستخدم</th>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">الدور</th>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">الفرع</th>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">الحالة</th>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">تاريخ التسجيل</th>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table-body">
+                    {% for user in users %}
+                    <tr class="border-b hover:bg-gray-50 transition-colors user-card" 
+                        data-user-id="{{ user.id }}"
+                        data-username="{{ user.username }}"
+                        data-role="{{ user.role }}"
+                        data-status="{{ 'active' if user.is_active else 'inactive' }}">
+                        <td class="py-4 px-6">
+                            <div class="flex items-center">
+                                <div class="user-avatar ml-4">
+                                    {{ user.username[0].upper() }}
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-gray-800">{{ user.username }}</p>
+                                    <p class="text-sm text-gray-600">{{ user.email }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        
+                        <td class="py-4 px-6">
+                            <span class="role-badge 
+                                {% if user.role == 'admin' %}role-admin
+                                {% elif user.role == 'manager' %}role-manager
+                                {% else %}role-auditor{% endif %}">
+                                {% if user.role == 'admin' %}مدير النظام
+                                {% elif user.role == 'manager' %}مدير فرع
+                                {% else %}مراجع{% endif %}
+                            </span>
+                        </td>
+                        
+                        <td class="py-4 px-6">
+                            <p class="text-gray-700">
+                                {{ user.branch.name if user.branch else 'لا يوجد' }}
+                            </p>
+                        </td>
+                        
+                        <td class="py-4 px-6">
+                            <div class="flex items-center">
+                                <span class="role-badge 
+                                    {% if user.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                    {% if user.is_active %}نشط{% else %}غير نشط{% endif %}
+                                </span>
+                                {% if user.id == current_user.id %}
+                                <span class="text-xs text-blue-600 mr-2">(أنت)</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        
+                        <td class="py-4 px-6">
+                            <p class="text-gray-700">
+                                {{ user.created_at.strftime('%Y-%m-%d') }}
+                            </p>
+                            <p class="text-sm text-gray-500">
+                                {{ user.created_at.strftime('%H:%M') }}
+                            </p>
+                        </td>
+                        
+                        <td class="py-4 px-6">
+                            <div class="flex items-center space-x-2 space-x-reverse">
+                                <button onclick="editUser({{ user.id }})"
+                                        class="action-btn text-blue-600 hover:bg-blue-50"
+                                        title="تعديل">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                
+                                <button onclick="toggleUserStatus({{ user.id }})"
+                                        class="action-btn 
+                                            {% if user.is_active %}text-yellow-600 hover:bg-yellow-50{% else %}text-green-600 hover:bg-green-50{% endif %}"
+                                        title="{% if user.is_active %}تعطيل{% else %}تفعيل{% endif %}">
+                                    <i class="fas {% if user.is_active %}fa-user-slash{% else %}fa-user-check{% endif %}"></i>
+                                </button>
+                                
+                                <button onclick="resetPassword({{ user.id }})"
+                                        class="action-btn text-purple-600 hover:bg-purple-50"
+                                        title="إعادة تعيين كلمة المرور">
+                                    <i class="fas fa-key"></i>
+                                </button>
+                                
+                                {% if user.id != current_user.id %}
+                                <button onclick="confirmDeleteUser({{ user.id }}, '{{ user.username }}')"
+                                        class="action-btn text-red-600 hover:bg-red-50"
+                                        title="حذف">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Mobile Cards -->
+        <div class="md:hidden p-5">
+            {% for user in users %}
+            <div class="bg-white border border-gray-200 rounded-xl p-5 mb-4 shadow-sm user-card"
+                 data-user-id="{{ user.id }}">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="flex items-center">
+                        <div class="user-avatar ml-3">
+                            {{ user.username[0].upper() }}
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-gray-800">{{ user.username }}</h3>
+                            <p class="text-sm text-gray-600">{{ user.email }}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col items-end gap-2">
+                        <span class="role-badge 
+                            {% if user.role == 'admin' %}role-admin
+                            {% elif user.role == 'manager' %}role-manager
+                            {% else %}role-auditor{% endif %}">
+                            {% if user.role == 'admin' %}مدير النظام
+                            {% elif user.role == 'manager' %}مدير فرع
+                            {% else %}مراجع{% endif %}
+                        </span>
+                        
+                        <span class="role-badge 
+                            {% if user.is_active %}status-active{% else %}status-inactive{% endif %}">
+                            {% if user.is_active %}نشط{% else %}غير نشط{% endif %}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <p class="text-sm text-gray-500">الفرع</p>
+                        <p class="font-medium">{{ user.branch.name if user.branch else 'لا يوجد' }}</p>
+                    </div>
+                    
+                    <div>
+                        <p class="text-sm text-gray-500">تاريخ التسجيل</p>
+                        <p class="font-medium">{{ user.created_at.strftime('%Y-%m-%d') }}</p>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between border-t pt-4">
+                    <button onclick="editUser({{ user.id }})"
+                            class="text-blue-600 text-sm flex items-center">
+                        <i class="fas fa-edit ml-1"></i> تعديل
+                    </button>
+                    
+                    <button onclick="toggleUserStatus({{ user.id }})"
+                            class="text-yellow-600 text-sm flex items-center">
+                        <i class="fas fa-user-slash ml-1"></i> تعطيل
+                    </button>
+                    
+                    <button onclick="resetPassword({{ user.id }})"
+                            class="text-purple-600 text-sm flex items-center">
+                        <i class="fas fa-key ml-1"></i> كلمة مرور
+                    </button>
+                    
+                    {% if user.id != current_user.id %}
+                    <button onclick="confirmDeleteUser({{ user.id }}, '{{ user.username }}')"
+                            class="text-red-600 text-sm flex items-center">
+                        <i class="fas fa-trash ml-1"></i> حذف
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Empty state -->
+        {% if not users %}
+        <div class="text-center py-12">
+            <i class="fas fa-users text-4xl mb-4 text-gray-300"></i>
+            <h3 class="text-lg font-medium text-gray-700 mb-2">لا يوجد مستخدمون</h3>
+            <p class="text-gray-500 mb-6">لم يتم إضافة أي مستخدمين بعد</p>
+            <button onclick="showAddUserModal()"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                <i class="fas fa-user-plus ml-2"></i>
+                إضافة أول مستخدم
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add/Edit User Modal -->
+<div id="user-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg animate__animated animate__zoomIn">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800" id="modal-title">إضافة مستخدم جديد</h3>
+                <button onclick="closeUserModal()" 
+                        class="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="p-6">
+            <form id="user-form" method="POST">
+                <input type="hidden" id="user-id" name="user_id">
+                
+                <div class="space-y-4">
+                    <!-- Username -->
+                    <div>
+                        <label for="username" class="block text-gray-700 mb-2 font-medium">اسم المستخدم *</label>
+                        <input type="text" id="username" name="username"
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                               required>
+                        <p class="text-xs text-gray-500 mt-1">يجب أن يكون اسم المستخدم فريداً</p>
+                    </div>
+                    
+                    <!-- Email -->
+                    <div>
+                        <label for="email" class="block text-gray-700 mb-2 font-medium">البريد الإلكتروني *</label>
+                        <input type="email" id="email" name="email"
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                               required>
+                    </div>
+                    
+                    <!-- Password (only for new users) -->
+                    <div id="password-fields">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="password" class="block text-gray-700 mb-2 font-medium">كلمة المرور</label>
+                                <input type="password" id="password" name="password"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                            </div>
+                            
+                            <div>
+                                <label for="confirm_password" class="block text-gray-700 mb-2 font-medium">تأكيد كلمة المرور</label>
+                                <input type="password" id="confirm_password" name="confirm_password"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">اتركه فارغاً للحفاظ على كلمة المرور الحالية</p>
+                    </div>
+                    
+                    <!-- Role -->
+                    <div>
+                        <label for="role" class="block text-gray-700 mb-2 font-medium">الدور *</label>
+                        <select id="role" name="role"
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                required>
+                            <option value="auditor">مراجع</option>
+                            <option value="manager">مدير فرع</option>
+                            <option value="admin">مدير النظام</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Branch -->
+                    <div>
+                        <label for="branch_id" class="block text-gray-700 mb-2 font-medium">الفرع</label>
+                        <select id="branch_id" name="branch_id"
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                            <option value="0">لا يوجد</option>
+                            {% for branch in branches %}
+                            <option value="{{ branch.id }}">{{ branch.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Status -->
+                    <div class="flex items-center">
+                        <input type="checkbox" id="is_active" name="is_active"
+                               class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <label for="is_active" class="mr-2 text-gray-700 font-medium">نشط</label>
+                    </div>
+                </div>
+                
+                <!-- Form Actions -->
+                <div class="flex justify-end space-x-3 space-x-reverse mt-8 pt-6 border-t">
+                    <button type="button" onclick="closeUserModal()"
+                            class="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                        إلغاء
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center">
+                        <span id="submit-text">إضافة مستخدم</span>
+                        <i class="fas fa-plus ml-2"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate__animated animate__zoomIn">
+        <div class="p-6 border-b">
+            <div class="flex items-center">
+                <div class="bg-red-100 p-3 rounded-lg ml-4">
+                    <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+                </div>
+                <h3 class="text-xl font-bold text-gray-800">تأكيد الحذف</h3>
+            </div>
+        </div>
+        
+        <div class="p-6">
+            <p class="text-gray-700 mb-6" id="delete-message">
+                هل أنت متأكد من حذف المستخدم <span id="delete-username" class="font-bold"></span>؟
+            </p>
+            
+            <div class="bg-red-50 p-4 rounded-lg mb-6">
+                <div class="flex items-center text-red-700">
+                    <i class="fas fa-exclamation-circle ml-2"></i>
+                    <p class="text-sm">هذا الإجراء لا يمكن التراجع عنه</p>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-3 space-x-reverse">
+                <button onclick="closeDeleteModal()"
+                        class="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                    إلغاء
+                </button>
+                <button onclick="deleteUser()"
+                        class="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center">
+                    <span>نعم، احذف</span>
+                    <i class="fas fa-trash ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div id="reset-password-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate__animated animate__zoomIn">
+        <div class="p-6 border-b">
+            <div class="flex items-center">
+                <div class="bg-purple-100 p-3 rounded-lg ml-4">
+                    <i class="fas fa-key text-purple-600 text-xl"></i>
+                </div>
+                <h3 class="text-xl font-bold text-gray-800">إعادة تعيين كلمة المرور</h3>
+            </div>
+        </div>
+        
+        <div class="p-6">
+            <p class="text-gray-700 mb-6" id="reset-message">
+                سيتم تعيين كلمة مرور جديدة للمستخدم <span id="reset-username" class="font-bold"></span>
+            </p>
+            
+            <div class="bg-blue-50 p-4 rounded-lg mb-6">
+                <div class="flex items-center text-blue-700">
+                    <i class="fas fa-info-circle ml-2"></i>
+                    <p class="text-sm">سيتم تعيين كلمة المرور الافتراضية: <code class="font-mono">password123</code></p>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-3 space-x-reverse">
+                <button onclick="closeResetModal()"
+                        class="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                    إلغاء
+                </button>
+                <button onclick="confirmResetPassword()"
+                        class="px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center">
+                    <span>تأكيد التعيين</span>
+                    <i class="fas fa-redo ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Global variables
+    let currentUserId = null;
+    let deleteUserId = null;
+    let resetUserId = null;
+    
+    // Initialize filters
+    document.addEventListener('DOMContentLoaded', function() {
+        setupFilters();
+        setupUserForm();
+    });
+    
+    // Setup search and filter functionality
+    function setupFilters() {
+        const searchInput = document.getElementById('search-users');
+        const roleFilter = document.getElementById('filter-role');
+        const statusFilter = document.getElementById('filter-status');
+        
+        if (searchInput) {
+            searchInput.addEventListener('input', filterUsers);
+        }
+        if (roleFilter) {
+            roleFilter.addEventListener('change', filterUsers);
+        }
+        if (statusFilter) {
+            statusFilter.addEventListener('change', filterUsers);
+        }
+    }
+    
+    function filterUsers() {
+        const searchTerm = document.getElementById('search-users').value.toLowerCase();
+        const roleFilter = document.getElementById('filter-role').value;
+        const statusFilter = document.getElementById('filter-status').value;
+        
+        const rows = document.querySelectorAll('#users-table-body tr, .user-card');
+        let visibleCount = 0;
+        
+        rows.forEach(row => {
+            const username = row.dataset.username?.toLowerCase() || '';
+            const role = row.dataset.role || '';
+            const status = row.dataset.status || '';
+            
+            let matches = true;
+            
+            // Search filter
+            if (searchTerm && !username.includes(searchTerm)) {
+                matches = false;
+            }
+            
+            // Role filter
+            if (roleFilter !== 'all' && role !== roleFilter) {
+                matches = false;
+            }
+            
+            // Status filter
+            if (statusFilter !== 'all' && status !== statusFilter) {
+                matches = false;
+            }
+            
+            if (matches) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        // Update counter
+        const counter = document.getElementById('user-count');
+        if (counter) {
+            counter.textContent = visibleCount;
+        }
+    }
+    
+    // Refresh users list
+    function refreshUsers() {
+        const btn = event?.target?.closest('button') || event?.target;
+        if (btn) {
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        }
+    }
+    
+    // Export users
+    function exportUsers() {
+        // Show loading
+        const btn = event?.target?.closest('button');
+        if (btn) {
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+            btn.disabled = true;
+            
+            // Simulate export
+            setTimeout(() => {
+                // Create download link
+                const link = document.createElement('a');
+                link.href = '#';
+                link.download = `users_export_${new Date().toISOString().split('T')[0]}.csv`;
+                link.click();
+                
+                // Restore button
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                
+                // Show success message
+                showNotification('تم تصدير بيانات المستخدمين بنجاح', 'success');
+            }, 1500);
+        }
+    }
+    
+    // User Modal Functions
+    function showAddUserModal() {
+        const modal = document.getElementById('user-modal');
+        const title = document.getElementById('modal-title');
+        const submitText = document.getElementById('submit-text');
+        const form = document.getElementById('user-form');
+        const passwordFields = document.getElementById('password-fields');
+        
+        // Reset form
+        form.reset();
+        form.method = 'POST';
+        form.action = '/admin/users/add';
+        
+        // Update UI
+        title.textContent = 'إضافة مستخدم جديد';
+        submitText.textContent = 'إضافة مستخدم';
+        
+        // Show password fields for new users
+        passwordFields.style.display = 'block';
+        
+        // Show modal
+        modal.classList.remove('hidden');
+    }
+    
+    async function editUser(userId) {
+        try {
+            const response = await fetch(`/api/user/${userId}`);
+            const user = await response.json();
+            
+            if (response.ok) {
+                const modal = document.getElementById('user-modal');
+                const title = document.getElementById('modal-title');
+                const submitText = document.getElementById('submit-text');
+                const form = document.getElementById('user-form');
+                const passwordFields = document.getElementById('password-fields');
+                
+                // Fill form data
+                document.getElementById('user-id').value = user.id;
+                document.getElementById('username').value = user.username;
+                document.getElementById('email').value = user.email;
+                document.getElementById('role').value = user.role;
+                document.getElementById('branch_id').value = user.branch_id || 0;
+                document.getElementById('is_active').checked = user.is_active;
+                
+                // Update form action
+                form.method = 'POST';
+                form.action = `/admin/users/edit/${userId}`;
+                
+                // Update UI
+                title.textContent = 'تعديل المستخدم';
+                submitText.textContent = 'حفظ التعديلات';
+                
+                // Hide password fields for existing users
+                passwordFields.style.display = 'none';
+                
+                // Show modal
+                modal.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error loading user:', error);
+            showNotification('خطأ في تحميل بيانات المستخدم', 'error');
+        }
+    }
+    
+    function closeUserModal() {
+        document.getElementById('user-modal').classList.add('hidden');
+        document.getElementById('user-form').reset();
+    }
+    
+    // Setup form validation
+    function setupUserForm() {
+        const form = document.getElementById('user-form');
+        if (form) {
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                // Validate passwords match
+                const password = document.getElementById('password').value;
+                const confirmPassword = document.getElementById('confirm_password').value;
+                
+                if (password && password !== confirmPassword) {
+                    showNotification('كلمات المرور غير متطابقة', 'error');
+                    return;
+                }
+                
+                // Show loading
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+                submitBtn.disabled = true;
+                
+                try {
+                    // Create form data
+                    const formData = new FormData(this);
+                    
+                    // Send request
+                    const response = await fetch(this.action, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        showNotification('تم حفظ المستخدم بنجاح', 'success');
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1500);
+                    } else {
+                        const error = await response.text();
+                        showNotification('حدث خطأ أثناء حفظ المستخدم', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showNotification('خطأ في الاتصال بالخادم', 'error');
+                } finally {
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                }
+            });
+        }
+    }
+    
+    // Toggle user status
+    async function toggleUserStatus(userId) {
+        try {
+            const response = await fetch(`/admin/users/toggle_active/${userId}`, {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showNotification('تم تغيير حالة المستخدم بنجاح', 'success');
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+            } else {
+                showNotification(result.error || 'حدث خطأ', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('خطأ في الاتصال بالخادم', 'error');
+        }
+    }
+    
+    // Delete user functions
+    function confirmDeleteUser(userId, username) {
+        deleteUserId = userId;
+        document.getElementById('delete-username').textContent = username;
+        document.getElementById('delete-modal').classList.remove('hidden');
+    }
+    
+    function closeDeleteModal() {
+        deleteUserId = null;
+        document.getElementById('delete-modal').classList.add('hidden');
+    }
+    
+    async function deleteUser() {
+        try {
+            const response = await fetch(`/admin/users/delete/${deleteUserId}`, {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showNotification('تم حذف المستخدم بنجاح', 'success');
+                closeDeleteModal();
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+            } else {
+                showNotification(result.error || 'حدث خطأ أثناء الحذف', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('خطأ في الاتصال بالخادم', 'error');
+        }
+    }
+    
+    // Reset password functions
+    function resetPassword(userId) {
+        resetUserId = userId;
+        const username = document.querySelector(`[data-user-id="${userId}"] [data-username]`)?.dataset.username || 
+                        document.querySelector(`[data-user-id="${userId}"] .font-bold`)?.textContent;
+        
+        document.getElementById('reset-username').textContent = username;
+        document.getElementById('reset-password-modal').classList.remove('hidden');
+    }
+    
+    function closeResetModal() {
+        resetUserId = null;
+        document.getElementById('reset-password-modal').classList.add('hidden');
+    }
+    
+    async function confirmResetPassword() {
+        try {
+            const response = await fetch(`/admin/users/reset_password/${resetUserId}`, {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showNotification(`تم تعيين كلمة المرور الجديدة: ${result.new_password}`, 'success');
+                closeResetModal();
+            } else {
+                showNotification(result.error || 'حدث خطأ', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('خطأ في الاتصال بالخادم', 'error');
+        }
+    }
+    
+    // Utility functions
+    function showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `fixed top-4 left-4 z-50 p-4 rounded-lg shadow-xl max-w-md animate__animated animate__slideInLeft
+                                ${type === 'success' ? 'bg-green-50 border-r-4 border-green-500' : 
+                                  type === 'error' ? 'bg-red-50 border-r-4 border-red-500' : 
+                                  'bg-blue-50 border-r-4 border-blue-500'}`;
+        
+        notification.innerHTML = `
+            <div class="flex items-start">
+                <i class="fas 
+                    ${type === 'success' ? 'fa-check-circle text-green-600' : 
+                      type === 'error' ? 'fa-exclamation-circle text-red-600' : 
+                      'fa-info-circle text-blue-600'} 
+                    mt-1 ml-3"></i>
+                <div class="flex-1">
+                    <p class="text-gray-800">${message}</p>
+                    <div class="flex justify-between items-center mt-3">
+                        <span class="text-sm text-gray-500">${new Date().toLocaleTimeString('ar-SA')}</span>
+                        <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                                class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.remove();
+            }
+        }, 5000);
+    }
+    
+    // Close modals when clicking outside
+    document.getElementById('user-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeUserModal();
+        }
+    });
+    
+    document.getElementById('delete-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeDeleteModal();
+        }
+    });
+    
+    document.getElementById('reset-password-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeResetModal();
+        }
+    });
+</script>
+{% endblock %}
