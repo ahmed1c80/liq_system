@@ -1,0 +1,1028 @@
+{% extends "base.html" %}
+
+{% block title %}حوادث المخاطر{% endblock %}
+
+{% block extra_css %}
+<style>
+    .incident-card {
+        transition: all 0.3s ease;
+        border-right: 4px solid;
+    }
+    
+    .incident-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .severity-critical {
+        border-right-color: #dc2626;
+        background: linear-gradient(to left, #fef2f2, #ffffff);
+    }
+    
+    .severity-high {
+        border-right-color: #ea580c;
+        background: linear-gradient(to left, #fffbeb, #ffffff);
+    }
+    
+    .severity-medium {
+        border-right-color: #ca8a04;
+        background: linear-gradient(to left, #fefce8, #ffffff);
+    }
+    
+    .severity-low {
+        border-right-color: #16a34a;
+        background: linear-gradient(to left, #f0fdf4, #ffffff);
+    }
+    
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .timeline-track {
+        position: relative;
+        padding-right: 2rem;
+    }
+    
+    .timeline-track:before {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e5e7eb;
+    }
+    
+    .timeline-track:last-child:before {
+        display: none;
+    }
+    
+    .timeline-marker {
+        position: absolute;
+        right: -0.5rem;
+        top: 1.5rem;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        border: 3px solid white;
+        z-index: 1;
+    }
+    
+    .filter-tag {
+        transition: all 0.2s ease;
+    }
+    
+    .filter-tag.active {
+        background-color: #3b82f6;
+        color: white;
+    }
+    
+    .impact-card {
+        border-radius: 0.75rem;
+        overflow: hidden;
+    }
+    
+    .impact-card-header {
+        padding: 1rem;
+        color: white;
+        font-weight: bold;
+    }
+    
+    .financial-impact {
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    }
+    
+    .operational-impact {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+    
+    .reputational-impact {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+    
+    .regulatory-impact {
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate__animated animate__fadeIn">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-2">إدارة حوادث المخاطر</h1>
+                <p class="text-gray-600">تسجيل وتحليل وتتبع حوادث المخاطر في المؤسسة</p>
+            </div>
+            
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <button onclick="showReportIncidentModal()"
+                        class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center">
+                    <i class="fas fa-exclamation-circle ml-2"></i>
+                    إبلاغ عن حادث
+                </button>
+                
+                <button onclick="exportIncidents()"
+                        class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center">
+                    <i class="fas fa-file-export ml-2"></i>
+                    تصدير
+                </button>
+            </div>
+        </div>
+        
+        <!-- Statistics -->
+        <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-white rounded-xl shadow p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm mb-1">إجمالي الحوادث</p>
+                        <h3 class="text-2xl font-bold text-gray-800">{{ incidents|length }}</h3>
+                    </div>
+                    <div class="bg-gray-100 p-2 rounded-lg">
+                        <i class="fas fa-exclamation-triangle text-gray-600"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm mb-1">حوادث هذا الشهر</p>
+                        <h3 class="text-2xl font-bold text-yellow-600">
+                       
+                            {{ incidents|selectattr('incident_date', 'month', this_month)|list|length }}
+                        </h3>
+                    </div>
+                    <div class="bg-yellow-100 p-2 rounded-lg">
+                        <i class="fas fa-calendar-alt text-yellow-600"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm mb-1">قيد التحقيق</p>
+                        <h3 class="text-2xl font-bold text-blue-600">
+                            {{ incidents|selectattr('investigation_status', 'equalto', 'investigating')|list|length }}
+                        </h3>
+                    </div>
+                    <div class="bg-blue-100 p-2 rounded-lg">
+                        <i class="fas fa-search text-blue-600"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm mb-1">متوسط وقت الحل</p>
+                        <h3 class="text-2xl font-bold text-green-600">3.2 أيام</h3>
+                    </div>
+                    <div class="bg-green-100 p-2 rounded-lg">
+                        <i class="fas fa-clock text-green-600"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="bg-white rounded-xl shadow mb-6">
+        <div class="p-6 border-b">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <h2 class="text-xl font-bold text-gray-800">تصفية الحوادث</h2>
+                
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="relative">
+                        <input type="text" 
+                               placeholder="ابحث في الحوادث..."
+                               class="pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full md:w-64"
+                               id="search-incidents">
+                        <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
+                    </div>
+                    
+                    <button onclick="clearFilters()"
+                            class="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                        مسح الفلاتر
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="p-6">
+            <!-- Severity Filter -->
+            <div class="mb-4">
+                <h3 class="font-medium text-gray-700 mb-3">خطورة الحادث</h3>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="filterBySeverity('all')"
+                            class="filter-tag active px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm">
+                        جميع الحوادث
+                    </button>
+                    <button onclick="filterBySeverity('critical')"
+                            class="filter-tag px-3 py-1.5 bg-red-100 text-red-800 rounded-lg text-sm">
+                        <i class="fas fa-radiation ml-1"></i> حرجة
+                    </button>
+                    <button onclick="filterBySeverity('high')"
+                            class="filter-tag px-3 py-1.5 bg-orange-100 text-orange-800 rounded-lg text-sm">
+                        <i class="fas fa-exclamation-triangle ml-1"></i> عالية
+                    </button>
+                    <button onclick="filterBySeverity('medium')"
+                            class="filter-tag px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded-lg text-sm">
+                        <i class="fas fa-exclamation-circle ml-1"></i> متوسطة
+                    </button>
+                    <button onclick="filterBySeverity('low')"
+                            class="filter-tag px-3 py-1.5 bg-green-100 text-green-800 rounded-lg text-sm">
+                        <i class="fas fa-info-circle ml-1"></i> منخفضة
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Status Filter -->
+            <div>
+                <h3 class="font-medium text-gray-700 mb-3">حالة الحادث</h3>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="filterByStatus('all')"
+                            class="filter-tag active px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm">
+                        جميع الحالات
+                    </button>
+                    <button onclick="filterByStatus('open')"
+                            class="filter-tag px-3 py-1.5 bg-red-100 text-red-800 rounded-lg text-sm">
+                        <i class="fas fa-folder-open ml-1"></i> مفتوحة
+                    </button>
+                    <button onclick="filterByStatus('investigating')"
+                            class="filter-tag px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg text-sm">
+                        <i class="fas fa-search ml-1"></i> قيد التحقيق
+                    </button>
+                    <button onclick="filterByStatus('resolved')"
+                            class="filter-tag px-3 py-1.5 bg-green-100 text-green-800 rounded-lg text-sm">
+                        <i class="fas fa-check-circle ml-1"></i> محلولة
+                    </button>
+                    <button onclick="filterByStatus('closed')"
+                            class="filter-tag px-3 py-1.5 bg-gray-100 text-gray-800 rounded-lg text-sm">
+                        <i class="fas fa-archive ml-1"></i> مغلقة
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Incidents List -->
+    <div class="bg-white rounded-xl shadow mb-6">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-800">قائمة الحوادث</h2>
+                <span class="text-sm text-gray-600" id="incidents-count">{{ incidents|length }} حادثة</span>
+            </div>
+        </div>
+        
+        <div class="p-6">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="py-3 px-4 text-right font-semibold text-gray-700">الحادثة</th>
+                            <th class="py-3 px-4 text-right font-semibold text-gray-700">التصنيف</th>
+                            <th class="py-3 px-4 text-right font-semibold text-gray-700">الخطورة</th>
+                            <th class="py-3 px-4 text-right font-semibold text-gray-700">الحالة</th>
+                            <th class="py-3 px-4 text-right font-semibold text-gray-700">تاريخ الحدوث</th>
+                            <th class="py-3 px-4 text-right font-semibold text-gray-700">الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="incidents-table-body">
+                        {% for incident in incidents %}
+                        <tr class="border-b hover:bg-gray-50 incident-row" 
+                            data-severity="{{ incident.severity }}"
+                            data-status="{{ incident.status }}">
+                            <td class="py-4 px-4">
+                                <div>
+                                    <p class="font-semibold text-gray-800">{{ incident.title }}</p>
+                                    <p class="text-sm text-gray-600 mt-1">{{ incident.branch.name }}</p>
+                                </div>
+                            </td>
+                            
+                            <td class="py-4 px-4">
+                                {% if incident.category %}
+                                <span class="px-3 py-1 rounded-full text-xs font-medium" 
+                                      style="background-color: {{ incident.category.color }}20; color: {{ incident.category.color }};">
+                                    {{ incident.category.name }}
+                                </span>
+                                {% else %}
+                                <span class="text-gray-500">-</span>
+                                {% endif %}
+                            </td>
+                            
+                            <td class="py-4 px-4">
+                                <span class="px-3 py-1 rounded-full text-xs font-medium 
+                                    {% if incident.severity == 'critical' %}bg-red-100 text-red-800
+                                    {% elif incident.severity == 'high' %}bg-orange-100 text-orange-800
+                                    {% elif incident.severity == 'medium' %}bg-yellow-100 text-yellow-800
+                                    {% else %}bg-green-100 text-green-800{% endif %}">
+                                    {% if incident.severity == 'critical' %}حرجة
+                                    {% elif incident.severity == 'high' %}عالية
+                                    {% elif incident.severity == 'medium' %}متوسطة
+                                    {% else %}منخفضة{% endif %}
+                                </span>
+                            </td>
+                            
+                            <td class="py-4 px-4">
+                                <span class="px-3 py-1 rounded-full text-xs font-medium 
+                                    {% if incident.status == 'open' %}bg-red-100 text-red-800
+                                    {% elif incident.status == 'investigating' %}bg-blue-100 text-blue-800
+                                    {% elif incident.status == 'resolved' %}bg-green-100 text-green-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {% if incident.status == 'open' %}مفتوحة
+                                    {% elif incident.status == 'investigating' %}قيد التحقيق
+                                    {% elif incident.status == 'resolved' %}محلولة
+                                    {% else %}مغلقة{% endif %}
+                                </span>
+                            </td>
+                            
+                            <td class="py-4 px-4">
+                                <div class="text-right">
+                                    <p class="font-medium">{{ incident.incident_date.strftime('%Y-%m-%d') }}</p>
+                                    <p class="text-sm text-gray-600">{{ incident.incident_date.strftime('%H:%M') }}</p>
+                                </div>
+                            </td>
+                            
+                            <td class="py-4 px-4">
+                                <div class="flex space-x-2 space-x-reverse">
+                                    <button onclick="viewIncidentDetails({{ incident.id }})"
+                                            class="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-lg">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    
+                                    {% if user_role in ['admin', 'risk_manager'] %}
+                                    <button onclick="editIncident({{ incident.id }})"
+                                            class="text-green-600 hover:text-green-800 p-2 hover:bg-green-50 rounded-lg">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    
+                                    <button onclick="assignIncident({{ incident.id }})"
+                                            class="text-purple-600 hover:text-purple-800 p-2 hover:bg-purple-50 rounded-lg">
+                                        <i class="fas fa-user-tag"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="py-12 text-center text-gray-500">
+                                <i class="fas fa-exclamation-circle text-4xl mb-4 text-gray-300"></i>
+                                <p>لا توجد حوادث مسجلة</p>
+                                <p class="text-sm mt-2">ابدأ بتسجيل أول حادث مخاطر</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Mobile View -->
+            <div class="md:hidden mt-6">
+                {% for incident in incidents %}
+                <div class="incident-card border border-gray-200 rounded-xl p-4 mb-4 
+                    {% if incident.severity == 'critical' %}severity-critical
+                    {% elif incident.severity == 'high' %}severity-high
+                    {% elif incident.severity == 'medium' %}severity-medium
+                    {% else %}severity-low{% endif %}"
+                    data-severity="{{ incident.severity }}"
+                    data-status="{{ incident.status }}">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <h3 class="font-bold text-gray-800">{{ incident.title }}</h3>
+                            <p class="text-sm text-gray-600 mt-1">{{ incident.branch.name }}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="px-2 py-1 rounded-full text-xs font-medium 
+                                {% if incident.severity == 'critical' %}bg-red-100 text-red-800
+                                {% elif incident.severity == 'high' %}bg-orange-100 text-orange-800
+                                {% elif incident.severity == 'medium' %}bg-yellow-100 text-yellow-800
+                                {% else %}bg-green-100 text-green-800{% endif %}">
+                                {% if incident.severity == 'critical' %}حرجة
+                                {% elif incident.severity == 'high' %}عالية
+                                {% elif incident.severity == 'medium' %}متوسطة
+                                {% else %}منخفضة{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="flex items-center justify-between text-sm text-gray-600 mb-2">
+                            <div class="flex items-center">
+                                <i class="fas fa-calendar-alt ml-2"></i>
+                                <span>{{ incident.incident_date.strftime('%Y-%m-%d') }}</span>
+                            </div>
+                            <span class="px-2 py-1 rounded text-xs 
+                                {% if incident.status == 'open' %}bg-red-100 text-red-800
+                                {% elif incident.status == 'investigating' %}bg-blue-100 text-blue-800
+                                {% elif incident.status == 'resolved' %}bg-green-100 text-green-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ incident.status_ar }}
+                            </span>
+                        </div>
+                        
+                        {% if incident.category %}
+                        <div class="flex items-center text-sm">
+                            <div class="w-2 h-2 rounded-full ml-2" style="background-color: {{ incident.category.color }}"></div>
+                            <span class="text-gray-700">{{ incident.category.name }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex justify-between border-t pt-3">
+                        <button onclick="viewIncidentDetails({{ incident.id }})"
+                                class="text-blue-600 text-sm flex items-center">
+                            <i class="fas fa-eye ml-1"></i> التفاصيل
+                        </button>
+                        
+                        {% if user_role in ['admin', 'risk_manager'] %}
+                        <button onclick="editIncident({{ incident.id }})"
+                                class="text-green-600 text-sm flex items-center">
+                            <i class="fas fa-edit ml-1"></i> تعديل
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Incident Analysis -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Impact Analysis -->
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-6">تحليل الأثر</h2>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div class="impact-card">
+                    <div class="impact-card-header financial-impact">
+                        <i class="fas fa-money-bill-wave ml-2"></i>
+                        الأثر المالي
+                    </div>
+                    <div class="p-4">
+                        <p class="text-2xl font-bold text-gray-800 mb-2">
+                            {{ "%.2f"|format(incidents|sum(attribute='financial_impact') or 0) }} ر.س
+                        </p>
+                        <p class="text-sm text-gray-600">إجمالي الخسائر المالية</p>
+                        <div class="mt-3">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>أعلى حادث:</span>
+                                <span class="font-bold">
+                                    {% set max_financial = incidents|max(attribute='financial_impact') %}
+                                    {{ "%.2f"|format(max_financial.financial_impact if max_financial else 0) }} ر.س
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="impact-card">
+                    <div class="impact-card-header operational-impact">
+                        <i class="fas fa-cogs ml-2"></i>
+                        الأثر التشغيلي
+                    </div>
+                    <div class="p-4">
+                        <p class="text-2xl font-bold text-gray-800 mb-2">
+                            {{ incidents|length }} حادثة
+                        </p>
+                        <p class="text-sm text-gray-600">إجمالي الأثر التشغيلي</p>
+                        <div class="mt-3">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>متوسط وقت التوقف:</span>
+                                <span class="font-bold">4.2 ساعات</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="impact-card">
+                    <div class="impact-card-header reputational-impact">
+                        <i class="fas fa-star ml-2"></i>
+                        الأثر على السمعة
+                    </div>
+                    <div class="p-4">
+                        <p class="text-2xl font-bold text-gray-800 mb-2">
+                            {{ incidents|selectattr('reputational_impact', 'defined')|list|length }}
+                        </p>
+                        <p class="text-sm text-gray-600">حوادث أثرت على السمعة</p>
+                        <div class="mt-3">
+                            <div class="text-sm text-gray-600">
+                                <span class="text-yellow-600 font-bold">متوسط</span> مستوى التأثير
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="impact-card">
+                    <div class="impact-card-header regulatory-impact">
+                        <i class="fas fa-gavel ml-2"></i>
+                        الأثر التنظيمي
+                    </div>
+                    <div class="p-4">
+                        <p class="text-2xl font-bold text-gray-800 mb-2">
+                            {{ incidents|selectattr('regulatory_reporting', 'equalto', True)|list|length }}
+                        </p>
+                        <p class="text-sm text-gray-600">حوادث تحتاج إبلاغ تنظيمي</p>
+                        <div class="mt-3">
+                            <div class="text-sm">
+                                <span class="text-green-600 font-bold">ممتثل</span> للوائح
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Activity Timeline -->
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-gray-800">سجل النشاط الأخير</h2>
+                <button onclick="refreshActivity()" class="text-blue-600 hover:text-blue-800">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-6 max-h-80 overflow-y-auto custom-scrollbar">
+                <div class="timeline-track">
+                    <div class="timeline-marker bg-blue-500"></div>
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-medium text-blue-800">تم إغلاق حادث #107</h4>
+                            <span class="text-sm text-blue-600">منذ ساعة</span>
+                        </div>
+                        <p class="text-sm text-blue-700">تم حل حادث انخفاض السيولة في فرع جدة</p>
+                        <div class="flex items-center mt-2 text-xs text-blue-600">
+                            <i class="fas fa-user ml-2"></i>
+                            <span>أحمد محمد</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-track">
+                    <div class="timeline-marker bg-green-500"></div>
+                    <div class="bg-green-50 p-4 rounded-lg">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-medium text-green-800">تم تسجيل حادث جديد</h4>
+                            <span class="text-sm text-green-600">منذ 3 ساعات</span>
+                        </div>
+                        <p class="text-sm text-green-700">حادث تعطل نظام الدفع في الفرع الرئيسي</p>
+                        <div class="flex items-center mt-2 text-xs text-green-600">
+                            <i class="fas fa-user ml-2"></i>
+                            <span>سارة عبدالله</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-track">
+                    <div class="timeline-marker bg-yellow-500"></div>
+                    <div class="bg-yellow-50 p-4 rounded-lg">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-medium text-yellow-800">تحديث حالة التحقيق</h4>
+                            <span class="text-sm text-yellow-600">منذ 5 ساعات</span>
+                        </div>
+                        <p class="text-sm text-yellow-700">تم تحديد السبب الجذري لحادث الأمان</p>
+                        <div class="flex items-center mt-2 text-xs text-yellow-600">
+                            <i class="fas fa-user ml-2"></i>
+                            <span>محمد خالد</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-track">
+                    <div class="timeline-marker bg-purple-500"></div>
+                    <div class="bg-purple-50 p-4 rounded-lg">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-medium text-purple-800">تقرير Basel III</h4>
+                            <span class="text-sm text-purple-600">منذ يوم</span>
+                        </div>
+                        <p class="text-sm text-purple-700">تم إعداد تقرير الحوادث لـ SAMA</p>
+                        <div class="flex items-center mt-2 text-xs text-purple-600">
+                            <i class="fas fa-user ml-2"></i>
+                            <span>فاطمة علي</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Report Incident Modal -->
+<div id="report-incident-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl animate__animated animate__zoomIn max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800">إبلاغ عن حادث</h3>
+                <button onclick="closeReportIncidentModal()" 
+                        class="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <form id="report-incident-form">
+                <div class="space-y-6">
+                    <!-- Incident Details -->
+                    <div>
+                        <h4 class="font-bold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-info-circle text-blue-600 ml-3"></i>
+                            تفاصيل الحادث
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">عنوان الحادث</label>
+                                <input type="text" 
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                       name="title" required>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">التصنيف</label>
+                                <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                        name="category_id">
+                                    <option value="">اختر تصنيف الحادث</option>
+                                    {% for category in risk_categories %}
+                                    <option value="{{ category.id }}">{{ category.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">الفرع</label>
+                                <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                        name="branch_id" required>
+                                    <option value="">اختر الفرع</option>
+                                    {% for branch in branches %}
+                                    <option value="{{ branch.id }}">{{ branch.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">خطورة الحادث</label>
+                                <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                        name="severity" required>
+                                    <option value="low">منخفضة</option>
+                                    <option value="medium" selected>متوسطة</option>
+                                    <option value="high">عالية</option>
+                                    <option value="critical">حرجة</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <label class="block text-gray-700 mb-2 font-medium">وصف الحادث</label>
+                            <textarea class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                      name="description" rows="3" required
+                                      placeholder="صف ما حدث بالتفصيل..."></textarea>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">تاريخ ووقت الحدوث</label>
+                                <input type="datetime-local" 
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                       name="incident_date" required>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">تاريخ الاكتشاف</label>
+                                <input type="datetime-local" 
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                       name="discovery_date">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Impact Assessment -->
+                    <div>
+                        <h4 class="font-bold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-chart-line text-red-600 ml-3"></i>
+                            تقييم الأثر
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">الأثر المالي (ر.س)</label>
+                                <input type="number" step="0.01" min="0"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                       name="financial_impact"
+                                       placeholder="0.00">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">الأثر التشغيلي</label>
+                                <textarea class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                          name="operational_impact" rows="2"
+                                          placeholder="وصف الأثر على العمليات..."></textarea>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">الأثر على السمعة</label>
+                                <textarea class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                          name="reputational_impact" rows="2"
+                                          placeholder="وصف الأثر على سمعة المؤسسة..."></textarea>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">السبب الجذري (مبدئي)</label>
+                                <textarea class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                          name="root_cause" rows="2"
+                                          placeholder="السبب المحتمل للحادث..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Basel III Compliance -->
+                    <div>
+                        <h4 class="font-bold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-shield-check text-green-600 ml-3"></i>
+                            التوافق التنظيمي
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">تصنيف Basel III</label>
+                                <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                        name="basel_category">
+                                    <option value="">اختر تصنيف Basel</option>
+                                    <option value="credit_risk">مخاطر الائتمان</option>
+                                    <option value="market_risk">مخاطر السوق</option>
+                                    <option value="operational_risk">مخاطر التشغيل</option>
+                                    <option value="liquidity_risk">مخاطر السيولة</option>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-center">
+                                <input type="checkbox" id="regulatory_reporting" name="regulatory_reporting" class="ml-2">
+                                <label for="regulatory_reporting" class="text-gray-700">
+                                    يحتاج إبلاغ تنظيمي (SAMA)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Initial Actions -->
+                    <div>
+                        <h4 class="font-bold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-tasks text-purple-600 ml-3"></i>
+                            الإجراءات الأولية
+                        </h4>
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">الإجراءات المتخذة</label>
+                            <textarea class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                      name="initial_actions" rows="3"
+                                      placeholder="وصف الإجراءات التي تم اتخاذها..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 space-x-reverse mt-6">
+                    <button type="button" onclick="closeReportIncidentModal()"
+                            class="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                        إلغاء
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center">
+                        <span>إبلاغ عن الحادث</span>
+                        <i class="fas fa-paper-plane ml-2"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initialize incidents management
+    let currentSeverityFilter = 'all';
+    let currentStatusFilter = 'all';
+    let searchTerm = '';
+    
+    // Show report incident modal
+    function showReportIncidentModal() {
+        const modal = document.getElementById('report-incident-modal');
+        
+        // Set default date to now
+        const now = new Date();
+        const dateStr = now.toISOString().slice(0, 16);
+        modal.querySelector('input[name="incident_date"]').value = dateStr;
+        modal.querySelector('input[name="discovery_date"]').value = dateStr;
+        
+        modal.classList.remove('hidden');
+    }
+    
+    function closeReportIncidentModal() {
+        document.getElementById('report-incident-modal').classList.add('hidden');
+        document.getElementById('report-incident-form').reset();
+    }
+    
+    // Handle incident form submission
+    document.getElementById('report-incident-form')?.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const data = Object.fromEntries(formData.entries());
+        
+        // Show loading
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await fetch('/api/incidents/report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                alert('✅ تم إبلاغ عن الحادث بنجاح');
+                closeReportIncidentModal();
+                
+                // Refresh page after delay
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                alert(result.error || 'حدث خطأ أثناء إبلاغ الحادث');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('خطأ في الاتصال بالخادم');
+        } finally {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+    
+    // Filter incidents by severity
+    function filterBySeverity(severity) {
+        currentSeverityFilter = severity;
+        
+        // Update UI
+        document.querySelectorAll('.filter-tag').forEach(tag => {
+            tag.classList.remove('active', 'bg-blue-600', 'text-white');
+        });
+        
+        event.target.classList.add('active', 'bg-blue-600', 'text-white');
+        
+        // Apply filters
+        applyFilters();
+    }
+    
+    // Filter incidents by status
+    function filterByStatus(status) {
+        currentStatusFilter = status;
+        
+        // Update UI
+        const buttons = event.target.parentElement.querySelectorAll('.filter-tag');
+        buttons.forEach(tag => {
+            tag.classList.remove('active', 'bg-blue-600', 'text-white');
+        });
+        
+        event.target.classList.add('active', 'bg-blue-600', 'text-white');
+        
+        // Apply filters
+        applyFilters();
+    }
+    
+    // Apply all filters
+    function applyFilters() {
+        const rows = document.querySelectorAll('.incident-row');
+        let visibleCount = 0;
+        
+        rows.forEach(row => {
+            const severity = row.dataset.severity;
+            const status = row.dataset.status;
+            const title = row.querySelector('td:first-child p:first-child').textContent.toLowerCase();
+            
+            let show = true;
+            
+            // Apply severity filter
+            if (currentSeverityFilter !== 'all' && severity !== currentSeverityFilter) {
+                show = false;
+            }
+            
+            // Apply status filter
+            if (currentStatusFilter !== 'all' && status !== currentStatusFilter) {
+                show = false;
+            }
+            
+            // Apply search filter
+            if (searchTerm && !title.includes(searchTerm.toLowerCase())) {
+                show = false;
+            }
+            
+            // Show/hide row
+            row.style.display = show ? '' : 'none';
+            if (show) visibleCount++;
+            
+            // Handle mobile cards
+            const mobileCard = document.querySelector(`.incident-card[data-severity="${severity}"][data-status="${status}"]`);
+            if (mobileCard) {
+                mobileCard.style.display = show ? '' : 'none';
+            }
+        });
+        
+        // Update count
+        document.getElementById('incidents-count').textContent = `${visibleCount} حادثة`;
+    }
+    
+    // Clear all filters
+    function clearFilters() {
+        currentSeverityFilter = 'all';
+        currentStatusFilter = 'all';
+        searchTerm = '';
+        
+        // Reset filter buttons
+        document.querySelectorAll('.filter-tag').forEach(tag => {
+            tag.classList.remove('active', 'bg-blue-600', 'text-white');
+        });
+        
+        // Reset search input
+        document.getElementById('search-incidents').value = '';
+        
+        // Show all
+        applyFilters();
+    }
+    
+    // Search incidents
+    document.getElementById('search-incidents')?.addEventListener('input', function(e) {
+        searchTerm = e.target.value.toLowerCase();
+        applyFilters();
+    });
+    
+    // View incident details
+    function viewIncidentDetails(incidentId) {
+        window.location.href = `/incident/${incidentId}`;
+    }
+    
+    // Edit incident
+    function editIncident(incidentId) {
+        alert(`تعديل حادث #${incidentId} - هذه الميزة قريباً`);
+    }
+    
+    // Assign incident
+    function assignIncident(incidentId) {
+        alert(`تعيين حادث #${incidentId} - هذه الميزة قريباً`);
+    }
+    
+    // Export incidents
+    function exportIncidents() {
+        const btn = event?.target?.closest('button');
+        if (btn) {
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                
+                // Create download link
+                const link = document.createElement('a');
+                link.href = '#';
+                link.download = `حوادث_المخاطر_${new Date().toISOString().split('T')[0]}.csv`;
+                link.click();
+                
+                alert('✅ تم تصدير الحوادث بنجاح');
+            }, 1000);
+        }
+    }
+    
+    // Refresh activity
+    function refreshActivity() {
+        const btn = event.target;
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            alert('تم تحديث سجل النشاط');
+        }, 500);
+    }
+    
+    // Close modal when clicking outside
+    document.getElementById('report-incident-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeReportIncidentModal();
+        }
+    });
+    
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', function() {
+        applyFilters();
+    });
+</script>
+{% endblock %}

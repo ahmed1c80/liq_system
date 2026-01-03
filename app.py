@@ -14,65 +14,16 @@ import json
 import os
 from wtforms import BooleanField
 from werkzeug.security import generate_password_hash, check_password_hash
-
+from models import db,User,Branch,Transaction,LiquidityRecord,Alert,RiskIndicator,RiskIndicatorValue,RiskAssessment,Risk,RiskReport,RiskIncident
 app = Flask(__name__)
 app.config.from_object('config.Config')
 
 # Initialize extensions
-db = SQLAlchemy(app)
+#db = SQLAlchemy(app)
+db.init_app(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
-
-# Models
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
-    role = db.Column(db.String(20), default='auditor')
-    branch_id = db.Column(db.Integer, db.ForeignKey('branch.id'))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    is_active = db.Column(db.Boolean, default=True)
-
-class Branch(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    code = db.Column(db.String(10), unique=True, nullable=False)
-    location = db.Column(db.String(200))
-    min_liquidity = db.Column(db.Float, default=1000000.0)  # Minimum required liquidity
-    max_liquidity = db.Column(db.Float, default=5000000.0)  # Maximum capacity
-    
-    # Relationships
-    users = db.relationship('User', backref='branch', lazy=True)
-    transactions = db.relationship('Transaction', backref='branch', lazy=True)
-    liquidity_records = db.relationship('LiquidityRecord', backref='branch', lazy=True)
-
-class Transaction(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    branch_id = db.Column(db.Integer, db.ForeignKey('branch.id'), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
-    transaction_type = db.Column(db.String(20))  # deposit, withdrawal, transfer
-    description = db.Column(db.String(500))
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    status = db.Column(db.String(20), default='completed')
-
-class LiquidityRecord(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    branch_id = db.Column(db.Integer, db.ForeignKey('branch.id'), nullable=False)
-    current_liquidity = db.Column(db.Float, nullable=False)
-    predicted_liquidity = db.Column(db.Float)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    alerts = db.Column(db.JSON)  # Store alert information
-
-class Alert(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    branch_id = db.Column(db.Integer, db.ForeignKey('branch.id'), nullable=False)
-    alert_type = db.Column(db.String(50))  # low_liquidity, high_liquidity, suspicious_activity
-    message = db.Column(db.String(500))
-    severity = db.Column(db.String(20))  # low, medium, high
-    is_read = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # Forms
 class LoginForm(FlaskForm):
@@ -1034,6 +985,22 @@ class RolePermission(db.Model):
 
 # Update UserForm class
 class UserForm(FlaskForm):
+    class Meta:
+        csrf = False  # تعطيل CSRF لهذا النموذج
+        
+    username = StringField('اسم المستخدم', validators=[DataRequired()])
+    email = StringField('البريد الإلكتروني', validators=[DataRequired(), Email()])
+    password = PasswordField('كلمة المرور', validators=[])
+    confirm_password = PasswordField('تأكيد كلمة المرور', validators=[])
+    role = SelectField('الدور', choices=[
+        ('auditor', 'مراجع'),
+        ('manager', 'مدير فرع'),
+        ('admin', 'مدير النظام')
+    ])
+    branch_id = SelectField('الفرع', coerce=int)
+    is_active = BooleanField('نشط')
+
+class UserForm2(FlaskForm):
     username = StringField('اسم المستخدم', validators=[DataRequired()])
     email = StringField('البريد الإلكتروني', validators=[DataRequired(), Email()])
     password = PasswordField('كلمة المرور', validators=[])
@@ -1065,7 +1032,7 @@ def admin_users():
 
 @app.route('/admin/users/add', methods=['GET', 'POST'])
 @login_required
-def add_user():
+def add_user2():
     if current_user.role != 'admin':
         return redirect(url_for('dashboard'))
     
@@ -1076,21 +1043,13 @@ def add_user():
         # Check if username exists
         existing_user = User.query.filter_by(username=form.username.data).first()
         if existing_user:
-            return render_template('admin/user_form.html', 
-                                 form=form, 
-                                 title='إضافة مستخدم جديد',
-                                 error='اسم المستخدم موجود بالفعل',
-                                 rtl=True)
+            return jsonify({'error': 'اسم المستخدم موجود بالفعل'}), 400
         
         # Check if email exists
         existing_email = User.query.filter_by(email=form.email.data).first()
         if existing_email:
-            return render_template('admin/user_form.html', 
-                                 form=form, 
-                                 title='إضافة مستخدم جديد',
-                                 error='البريد الإلكتروني موجود بالفعل',
-                                 rtl=True)
-        
+            return jsonify({'error': 'البريد الإلكتروني موجود بالفعل'}), 400
+
         # Create new user
         user = User(
             username=form.username.data,
@@ -1110,6 +1069,66 @@ def add_user():
         db.session.commit()
         
         return redirect(url_for('admin_users'))
+    
+    return render_template('admin/user_form.html', 
+                         form=form, 
+                         title='إضافة مستخدم جديد',
+                         rtl=True)
+
+@app.route('/admin/users/add2', methods=['GET', 'POST'])
+@login_required
+def add_user():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'غير مصرح لك بهذا الإجراء'}), 403
+    
+    if request.method == 'POST':
+        # الحصول على البيانات من طلب fetch
+        data = UserForm()# request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'لا توجد بيانات'}), 400
+        
+        # التحقق من البيانات المطلوبة
+        required_fields = ['username', 'email', 'role']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'حقل {field} مطلوب'}), 400
+        
+        # التحقق من وجود اسم المستخدم
+        existing_user = User.query.filter_by(username=data['username']).first()
+        if existing_user:
+            return jsonify({'error': 'اسم المستخدم موجود بالفعل'}), 400
+        
+        # التحقق من وجود البريد الإلكتروني
+        existing_email = User.query.filter_by(email=data['email']).first()
+        if existing_email:
+            return jsonify({'error': 'البريد الإلكتروني موجود بالفعل'}), 400
+        
+        # إنشاء مستخدم جديد
+        user = User(
+            username=data['username'],
+            email=data['email'],
+            role=data['role'],
+            branch_id=data.get('branch_id') if data.get('branch_id') else None,
+            is_active=data.get('is_active', True)
+        )
+        
+        # تعيين كلمة المرور
+        password = data.get('password', 'password123')
+        user.password = generate_password_hash(password)
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'تمت إضافة المستخدم بنجاح',
+            'user_id': user.id
+        }), 201
+    
+    # للطلبات GET تعرض النموذج
+    #form = UserForm()
+    #form.branch_id.choices = [(0, 'لا يوجد')] + [(b.id, b.name) for b in Branch.query.all()]
     
     return render_template('admin/user_form.html', 
                          form=form, 
@@ -1269,6 +1288,807 @@ def api_user(user_id):
 
 
 
+
+
+
+
+
+
+
+
+# Risk Management Routes
+
+@app.route('/risk/dashboard')
+@login_required
+def risk_dashboard():
+    """Risk management dashboard"""
+    if not check_permission(current_user.role, 'view_risks'):
+        return redirect(url_for('dashboard'))
+    
+    # Get risk statistics
+    total_risks = Risk.query.filter_by(is_active=True).count()
+    open_risks = Risk.query.filter_by(is_active=True, status='open').count()
+    
+    # Get top risks
+    top_risks = Risk.query.filter_by(is_active=True)\
+        .order_by(Risk.risk_score.desc())\
+        .limit(5)\
+        .all()
+    
+    # Get risk categories
+    risk_categories = []
+    for cat in app.config['RISK_CATEGORIES']:
+        count = Risk.query.filter_by(category_id=cat.get('id', 0), is_active=True).count()
+        risk_categories.append({
+            **cat,
+            'risk_count': count
+        })
+    
+    # Get branches and users for dropdowns
+    branches = Branch.query.all()
+    users = User.query.filter_by(is_active=True).all()
+    
+    # Get recent incidents
+    incidents = RiskIncident.query.order_by(RiskIncident.incident_date.desc())\
+        .limit(5)\
+        .all()
+    
+    # Get KRI data (simulated for now)
+    kris = [
+        {'name': 'نسبة السيولة اليومية', 'value': 125, 'unit': '%', 'status': 'green', 
+         'category': 'مخاطر السيولة', 'branch': 'الفرع الرئيسي', 'last_updated': 'اليوم'},
+        {'name': 'صافي التمويل المستقر', 'value': 112, 'unit': '%', 'status': 'green',
+         'category': 'مخاطر السيولة', 'branch': 'جميع الفروع', 'last_updated': 'الشهر الحالي'},
+        {'name': 'نسبة الديون المتعثرة', 'value': 1.8, 'unit': '%', 'status': 'green',
+         'category': 'مخاطر الائتمان', 'branch': 'الفرع الرئيسي', 'last_updated': 'الربع الحالي'},
+        {'name': 'التعرض للعملات الأجنبية', 'value': 15, 'unit': '%', 'status': 'yellow',
+         'category': 'مخاطر السوق', 'branch': 'فرع جدة', 'last_updated': 'الأسبوع الحالي'},
+    ]
+    
+    return render_template('risk/dashboard.html',
+                         total_risks=total_risks,
+                         open_risks=open_risks,
+                         top_risks=top_risks,
+                         risk_categories=risk_categories,
+                         branches=branches,
+                         users=users,
+                         incidents=incidents,
+                         kris=kris,
+                         user_role=current_user.role,
+                         rtl=True,
+                         now=datetime.now)
+
+@app.route('/risk/register')
+@login_required
+def risk_register():
+    """Risk register - list all risks"""
+    if not check_permission(current_user.role, 'view_risks'):
+        return redirect(url_for('dashboard'))
+    
+    # Get risks based on user permissions
+    if current_user.role == 'admin':
+        risks = Risk.query.filter_by(is_active=True).all()
+    elif current_user.role == 'branch_manager':
+        risks = Risk.query.filter_by(branch_id=current_user.branch_id, is_active=True).all()
+    else:
+        risks = []
+    
+    return render_template('risk/register.html',
+                         risks=risks,
+                         user_role=current_user.role,
+                         rtl=True)
+
+@app.route('/risk/<int:risk_id>')
+@login_required
+def risk_details(risk_id):
+    """View risk details"""
+    risk = Risk.query.get_or_404(risk_id)
+    
+    # Check permission
+    if not check_risk_permission(current_user, risk, 'view_risks'):
+        return redirect(url_for('risk_dashboard'))
+    
+    # Get related data
+    controls = RiskControl.query.filter_by(risk_id=risk_id).all()
+    actions = RiskAction.query.filter_by(risk_id=risk_id).all()
+    assessments = RiskAssessment.query.filter_by(risk_id=risk_id).all()
+    
+    return render_template('risk/details.html',
+                         risk=risk,
+                         controls=controls,
+                         actions=actions,
+                         assessments=assessments,
+                         user_role=current_user.role,
+                         rtl=True)
+
+@app.route('/risk/incidents')
+@login_required
+def risk_incidents():
+    """Risk incidents management"""
+    if not check_permission(current_user.role, 'view_incidents'):
+        return redirect(url_for('dashboard'))
+    
+    incidents = RiskIncident.query.order_by(RiskIncident.incident_date.desc()).all()
+    branches = Branch.query.all()
+    return render_template('risk/incidents.html',
+                         incidents=incidents,
+                         this_month=datetime.now,
+                         branches=branches,
+                         user_role=current_user.role,
+                         rtl=True)
+
+@app.route('/risk/kris')
+@login_required
+def kri_monitoring():
+    """Key Risk Indicators monitoring"""
+    if not check_permission(current_user.role, 'view_kris'):
+        return redirect(url_for('dashboard'))
+    
+    indicators = RiskIndicator.query.all()
+    values = RiskIndicatorValue.query.order_by(RiskIndicatorValue.value_date.desc()).all()
+    
+    return render_template('risk/kris.html',
+                         indicators=indicators,
+                         values=values,
+                         user_role=current_user.role,
+                         rtl=True)
+
+@app.route('/risk/reports')
+@login_required
+def risk_reports():
+    """Risk reports"""
+    if not check_permission(current_user.role, 'view_reports'):
+        return redirect(url_for('dashboard'))
+    
+    reports = RiskReport.query.order_by(RiskReport.generated_date.desc()).all()
+    
+    return render_template('risk/reports.html',
+                         reports=reports,
+                         user_role=current_user.role,
+                         rtl=True)
+
+# API Endpoints for Risk Management
+
+@app.route('/api/risks/add', methods=['POST'])
+@login_required
+def add_risk():
+    """Add new risk"""
+    if not check_permission(current_user.role, 'edit_risks'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        data = request.json
+        
+        # Create new risk
+        risk = Risk(
+            title=data.get('title'),
+            description=data.get('description'),
+            category_id=data.get('category_id'),
+            branch_id=data.get('branch_id'),
+            impact=data.get('impact', 3),
+            likelihood=data.get('likelihood', 3),
+            risk_score=data.get('risk_score', 9),
+            priority=data.get('priority', 'medium'),
+            status='open',
+            basel_category=data.get('basel_category'),
+            capital_requirement=data.get('capital_requirement'),
+            potential_loss=data.get('potential_loss'),
+            mitigation_cost=data.get('mitigation_cost'),
+            target_resolution_date=datetime.strptime(data.get('target_resolution_date'), '%Y-%m-%d') if data.get('target_resolution_date') else None,
+            owner_id=data.get('owner_id'),
+            assigned_to_id=data.get('assigned_to_id'),
+            created_by_id=current_user.id
+        )
+        
+        db.session.add(risk)
+        db.session.commit()
+        
+        # Send notification
+        socketio.emit('new_risk', {
+            'risk_id': risk.id,
+            'title': risk.title,
+            'priority': risk.priority,
+            'branch_id': risk.branch_id,
+            'created_by': current_user.username
+        })
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم تسجيل الخطر بنجاح',
+            'risk_id': risk.id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/risks/<int:risk_id>/assess', methods=['POST'])
+@login_required
+def assess_risk(risk_id):
+    """Assess a risk"""
+    risk = Risk.query.get_or_404(risk_id)
+    
+    if not check_risk_permission(current_user, risk, 'perform_assessments'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        data = request.json
+        
+        # Create assessment
+        assessment = RiskAssessment(
+            risk_id=risk_id,
+            assessed_by_id=current_user.id,
+            impact_score=data.get('impact_score'),
+            likelihood_score=data.get('likelihood_score'),
+            residual_risk_score=data.get('residual_risk_score'),
+            comments=data.get('comments'),
+            recommendations=data.get('recommendations')
+        )
+        
+        # Update risk if needed
+        if data.get('update_risk', False):
+            risk.impact = data.get('impact_score')
+            risk.likelihood = data.get('likelihood_score')
+            risk.risk_score = data.get('residual_risk_score')
+            risk.updated_at = datetime.utcnow()
+        
+        db.session.add(assessment)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم تقييم الخطر بنجاح'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/kris/values/add', methods=['POST'])
+@login_required
+def add_kri_value():
+    """Add KRI value"""
+    if not check_permission(current_user.role, 'manage_kris'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        data = request.json
+        
+        value = RiskIndicatorValue(
+            indicator_id=data.get('indicator_id'),
+            branch_id=data.get('branch_id'),
+            value=data.get('value'),
+            value_date=datetime.strptime(data.get('value_date'), '%Y-%m-%d'),
+            collected_by_id=current_user.id,
+            collection_method=data.get('collection_method', 'manual'),
+            notes=data.get('notes')
+        )
+        
+        # Calculate status based on thresholds
+        indicator = RiskIndicator.query.get(data.get('indicator_id'))
+        if indicator:
+            if indicator.green_min <= value.value <= indicator.green_max:
+                value.status = 'green'
+            elif indicator.yellow_min <= value.value <= indicator.yellow_max:
+                value.status = 'yellow'
+            else:
+                value.status = 'red'
+            
+            value.deviation = ((value.value - indicator.green_min) / indicator.green_min * 100)
+        
+        db.session.add(value)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم تسجيل قيمة المؤشر بنجاح'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+
+
+
+
+
+
+
+
+
+@app.route('/api/incidents/report', methods=['POST'])
+@login_required
+def report_incident():
+    """Report a new risk incident"""
+    if not check_permission(current_user.role, 'report_incidents') :
+        return jsonify({'error': 'غير مصرح به'}), 403
+    
+    try:
+        data = request.json
+        
+        # Validate required fields
+        required_fields = ['title', 'description', 'branch_id', 'incident_date']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'الحقل {field} مطلوب'}), 400
+        
+        # Parse dates
+        incident_date = datetime.strptime(data.get('incident_date'), '%Y-%m-%d')
+        discovery_date = datetime.strptime(data.get('discovery_date'), '%Y-%m-%d') if data.get('discovery_date') else None
+        
+        # Create incident
+        incident = RiskIncident(
+            title=data.get('title'),
+            description=data.get('description'),
+            category_id=data.get('category_id'),
+            branch_id=data.get('branch_id'),
+            incident_date=incident_date,
+            discovery_date=discovery_date,
+            reporting_date=datetime.utcnow(),
+            
+            # Impact
+            financial_impact=data.get('financial_impact'),
+            operational_impact=data.get('operational_impact'),
+            reputational_impact=data.get('reputational_impact'),
+            severity=data.get('severity', 'medium'),
+            
+            # Root cause
+            root_cause=data.get('root_cause'),
+            contributing_factors=data.get('contributing_factors'),
+            
+            # Status
+            status='open',
+            investigation_status='pending',
+            
+            # Responsibility
+            reported_by_id=current_user.id,
+            assigned_to_id=data.get('assigned_to_id', current_user.id),
+            
+            # Regulatory
+            basel_category=data.get('basel_category'),
+            regulatory_reporting=data.get('regulatory_reporting', False)
+        )
+        
+        db.session.add(incident)
+        db.session.commit()
+        
+        # Send real-time notification
+        socketio.emit('new_incident', {
+            'incident_id': incident.id,
+            'title': incident.title,
+            'severity': incident.severity,
+            'branch_id': incident.branch_id,
+            'reported_by': current_user.username,
+            'timestamp': datetime.utcnow().isoformat()
+        })
+        
+        # Send email notification to risk managers
+        send_incident_notification(incident)
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم إبلاغ الحادث بنجاح',
+            'incident_id': incident.id,
+            'incident_number': f'INC-{incident.id:06d}'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f'Error reporting incident: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/incidents', methods=['GET'])
+@login_required
+def get_incidents():
+    """Get incidents with filters"""
+    if not check_permission(current_user.role, 'view_incidents'):
+        return jsonify({'error': 'غير مصرح به'}), 403
+    
+    try:
+        # Parse query parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        status = request.args.get('status')
+        severity = request.args.get('severity')
+        branch_id = request.args.get('branch_id')
+        category_id = request.args.get('category_id')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query
+        query = RiskIncident.query
+        
+        # Apply filters based on user role
+        if current_user.role == 'branch_manager':
+            query = query.filter_by(branch_id=current_user.branch_id)
+        elif current_user.role == 'risk_manager':
+            # Risk managers can see all incidents
+            pass
+        elif current_user.role == 'auditor':
+            # Auditors can see all incidents
+            pass
+        elif current_user.role != 'admin':
+            query = query.filter_by(reported_by_id=current_user.id)
+        
+        # Apply filters
+        if status:
+            query = query.filter_by(status=status)
+        if severity:
+            query = query.filter_by(severity=severity)
+        if branch_id:
+            query = query.filter_by(branch_id=branch_id)
+        if category_id:
+            query = query.filter_by(category_id=category_id)
+        if start_date:
+            start = datetime.strptime(start_date, '%Y-%m-%d')
+            query = query.filter(RiskIncident.incident_date >= start)
+        if end_date:
+            end = datetime.strptime(end_date, '%Y-%m-%d')
+            query = query.filter(RiskIncident.incident_date <= end)
+        
+        # Order and paginate
+        incidents = query.order_by(RiskIncident.incident_date.desc())\
+                         .paginate(page=page, per_page=per_page, error_out=False)
+        
+        # Prepare response
+        incidents_data = []
+        for incident in incidents.items:
+            incidents_data.append({
+                'id': incident.id,
+                'incident_number': f'INC-{incident.id:06d}',
+                'title': incident.title,
+                'description': incident.description,
+                'category': incident.category.name if incident.category else 'غير مصنف',
+                'branch': incident.branch.name if incident.branch else 'غير محدد',
+                'severity': incident.severity,
+                'severity_ar': {
+                    'low': 'منخفض',
+                    'medium': 'متوسط',
+                    'high': 'مرتفع',
+                    'critical': 'حرج'
+                }.get(incident.severity, incident.severity),
+                'status': incident.status,
+                'status_ar': {
+                    'open': 'مفتوح',
+                    'investigating': 'قيد التحقيق',
+                    'resolved': 'تم الحل',
+                    'closed': 'مغلق'
+                }.get(incident.status, incident.status),
+                'financial_impact': incident.financial_impact,
+                'incident_date': incident.incident_date.isoformat(),
+                'discovery_date': incident.discovery_date.isoformat() if incident.discovery_date else None,
+                'reporting_date': incident.reporting_date.isoformat() if incident.reporting_date else None,
+                'reported_by': incident.reported_by.username if incident.reported_by else 'غير معروف',
+                'assigned_to': incident.assigned_to.username if incident.assigned_to else 'غير معين',
+                'created_at': incident.created_at.isoformat(),
+                'updated_at': incident.updated_at.isoformat()
+            })
+        
+        return jsonify({
+            'success': True,
+            'incidents': incidents_data,
+            'total': incidents.total,
+            'page': incidents.page,
+            'per_page': incidents.per_page,
+            'pages': incidents.pages
+        })
+        
+    except Exception as e:
+        logger.error(f'Error getting incidents: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/incidents/<int:incident_id>', methods=['GET'])
+@login_required
+def get_incident(incident_id):
+    """Get single incident details"""
+    incident = RiskIncident.query.get_or_404(incident_id)
+    
+    # Check permission
+    if not check_incident_permission(current_user, incident, 'view_incidents'):
+        return jsonify({'error': 'غير مصرح به'}), 403
+    
+    incident_data = {
+        'id': incident.id,
+        'incident_number': f'INC-{incident.id:06d}',
+        'title': incident.title,
+        'description': incident.description,
+        'category': {
+            'id': incident.category.id if incident.category else None,
+            'name': incident.category.name if incident.category else 'غير مصنف',
+            'color': incident.category.color if incident.category else '#6b7280'
+        },
+        'branch': {
+            'id': incident.branch.id,
+            'name': incident.branch.name,
+            'code': incident.branch.code
+        },
+        'severity': incident.severity,
+        'severity_ar': {
+            'low': 'منخفض',
+            'medium': 'متوسط',
+            'high': 'مرتفع',
+            'critical': 'حرج'
+        }.get(incident.severity, incident.severity),
+        'status': incident.status,
+        'status_ar': {
+            'open': 'مفتوح',
+            'investigating': 'قيد التحقيق',
+            'resolved': 'تم الحل',
+            'closed': 'مغلق'
+        }.get(incident.status, incident.status),
+        'investigation_status': incident.investigation_status,
+        'financial_impact': incident.financial_impact,
+        'operational_impact': incident.operational_impact,
+        'reputational_impact': incident.reputational_impact,
+        'root_cause': incident.root_cause,
+        'contributing_factors': incident.contributing_factors,
+        'incident_date': incident.incident_date.isoformat(),
+        'discovery_date': incident.discovery_date.isoformat() if incident.discovery_date else None,
+        'reporting_date': incident.reporting_date.isoformat() if incident.reporting_date else None,
+        'resolution_date': incident.resolution_date.isoformat() if incident.resolution_date else None,
+        'reported_by': {
+            'id': incident.reported_by.id if incident.reported_by else None,
+            'name': incident.reported_by.username if incident.reported_by else 'غير معروف',
+            'role': incident.reported_by.role if incident.reported_by else None
+        },
+        'assigned_to': {
+            'id': incident.assigned_to.id if incident.assigned_to else None,
+            'name': incident.assigned_to.username if incident.assigned_to else 'غير معين',
+            'role': incident.assigned_to.role if incident.assigned_to else None
+        },
+        'basel_category': incident.basel_category,
+        'regulatory_reporting': incident.regulatory_reporting,
+        'created_at': incident.created_at.isoformat(),
+        'updated_at': incident.updated_at.isoformat()
+    }
+    
+    return jsonify({
+        'success': True,
+        'incident': incident_data
+    })
+
+@app.route('/api/incidents/<int:incident_id>/update', methods=['POST'])
+@login_required
+def update_incident(incident_id):
+    """Update incident"""
+    incident = RiskIncident.query.get_or_404(incident_id)
+    
+    if not check_incident_permission(current_user, incident, 'manage_incidents'):
+        return jsonify({'error': 'غير مصرح به'}), 403
+    
+    try:
+        data = request.json
+        
+        # Update fields
+        updatable_fields = [
+            'title', 'description', 'category_id', 'severity', 'status',
+            'investigation_status', 'financial_impact', 'operational_impact',
+            'reputational_impact', 'root_cause', 'contributing_factors',
+            'assigned_to_id', 'basel_category', 'regulatory_reporting'
+        ]
+        
+        for field in updatable_fields:
+            if field in data:
+                setattr(incident, field, data[field])
+        
+        # Handle dates
+        if data.get('incident_date'):
+            incident.incident_date = datetime.strptime(data.get('incident_date'), '%Y-%m-%d')
+        if data.get('discovery_date'):
+            incident.discovery_date = datetime.strptime(data.get('discovery_date'), '%Y-%m-%d')
+        if data.get('resolution_date'):
+            incident.resolution_date = datetime.strptime(data.get('resolution_date'), '%Y-%m-%d')
+        
+        # If status changed to resolved/closed, set resolution date
+        if data.get('status') in ['resolved', 'closed'] and not incident.resolution_date:
+            incident.resolution_date = datetime.utcnow()
+        
+        incident.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        # Send notification if status changed
+        if data.get('status') and data.get('status') != incident.status:
+            socketio.emit('incident_updated', {
+                'incident_id': incident.id,
+                'status': incident.status,
+                'updated_by': current_user.username,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم تحديث الحادث بنجاح'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Error updating incident: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/incidents/<int:incident_id>/add-note', methods=['POST'])
+@login_required
+def add_incident_note(incident_id):
+    """Add note to incident"""
+    incident = RiskIncident.query.get_or_404(incident_id)
+    
+    if not check_incident_permission(current_user, incident, 'view_incidents'):
+        return jsonify({'error': 'غير مصرح به'}), 403
+    
+    try:
+        data = request.json
+        note = data.get('note')
+        
+        if not note:
+            return jsonify({'error': 'ملاحظة مطلوبة'}), 400
+        
+        # In a real app, you would have an IncidentNote model
+        # For now, we'll update the operational_impact field
+        if incident.operational_impact:
+            incident.operational_impact += f"\n\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {current_user.username}:\n{note}"
+        else:
+            incident.operational_impact = f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {current_user.username}:\n{note}"
+        
+        incident.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم إضافة الملاحظة بنجاح'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/incidents/stats', methods=['GET'])
+@login_required
+def get_incident_stats():
+    """Get incident statistics"""
+    if not check_permission(current_user.role, 'view_incidents'):
+        return jsonify({'error': 'غير مصرح به'}), 403
+    
+    try:
+        # Total incidents
+        total_query = RiskIncident.query
+        if current_user.role == 'branch_manager':
+            total_query = total_query.filter_by(branch_id=current_user.branch_id)
+        
+        total_incidents = total_query.count()
+        
+        # Incidents by status
+        status_counts = {}
+        statuses = ['open', 'investigating', 'resolved', 'closed']
+        for status in statuses:
+            query = RiskIncident.query.filter_by(status=status)
+            if current_user.role == 'branch_manager':
+                query = query.filter_by(branch_id=current_user.branch_id)
+            status_counts[status] = query.count()
+        
+        # Incidents by severity
+        severity_counts = {}
+        severities = ['low', 'medium', 'high', 'critical']
+        for severity in severities:
+            query = RiskIncident.query.filter_by(severity=severity)
+            if current_user.role == 'branch_manager':
+                query = query.filter_by(branch_id=current_user.branch_id)
+            severity_counts[severity] = query.count()
+        
+        # Monthly trend (last 6 months)
+        monthly_trend = []
+        for i in range(6):
+            month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            month_start = month_start - timedelta(days=30*i)
+            month_end = month_start + timedelta(days=30)
+            
+            query = RiskIncident.query.filter(
+                RiskIncident.incident_date >= month_start,
+                RiskIncident.incident_date < month_end
+            )
+            if current_user.role == 'branch_manager':
+                query = query.filter_by(branch_id=current_user.branch_id)
+            
+            monthly_trend.append({
+                'month': month_start.strftime('%Y-%m'),
+                'count': query.count(),
+                'month_name': month_start.strftime('%b')
+            })
+        
+        # Incidents by category
+        category_stats = []
+        categories = RiskCategory.query.all()
+        for category in categories:
+            query = RiskIncident.query.filter_by(category_id=category.id)
+            if current_user.role == 'branch_manager':
+                query = query.filter_by(branch_id=current_user.branch_id)
+            
+            category_stats.append({
+                'category_id': category.id,
+                'category_name': category.name,
+                'color': category.color,
+                'count': query.count()
+            })
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_incidents': total_incidents,
+                'status_counts': status_counts,
+                'severity_counts': severity_counts,
+                'monthly_trend': monthly_trend,
+                'category_stats': category_stats
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f'Error getting incident stats: {str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+# Helper functions
+def check_incident_permission(user, incident, permission):
+    """Check if user has permission for specific incident"""
+    if user.role == 'admin':
+        return True
+    elif user.role == 'risk_manager':
+        return check_permission(user.role, permission)
+    elif user.role == 'branch_manager':
+        return incident.branch_id == user.branch_id and check_permission(user.role, permission)
+    elif user.role == 'auditor':
+        return check_permission(user.role, permission)
+    # User can view their own reported incidents
+    elif incident.reported_by_id == user.id:
+        return permission in ['view_incidents', 'report_incidents']
+    return False
+
+def send_incident_notification(incident):
+    """Send email notification for new incident"""
+    try:
+        # Get risk managers and admins
+        recipients = User.query.filter(
+            User.role.in_(['admin', 'risk_manager']),
+            User.is_active == True
+        ).all()
+        
+        for recipient in recipients:
+            # In real app, send email
+            # For now, just log
+            logger.info(f"Incident notification for {recipient.email}: {incident.title}")
+            
+            # Send WebSocket notification
+            socketio.emit('incident_notification', {
+                'user_id': recipient.id,
+                'incident_id': incident.id,
+                'title': incident.title,
+                'severity': incident.severity,
+                'branch': incident.branch.name,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+            
+    except Exception as e:
+        logger.error(f"Error sending incident notification: {e}")
+
+
+
+
+# Helper functions
+def check_permission(role, permission):
+    """Check if role has permission"""
+    return permission in app.config['RISK_ROLES'].get(role, [])
+
+def check_risk_permission(user, risk, permission):
+    """Check if user has permission for specific risk"""
+    if user.role == 'admin':
+        return True
+    elif user.role == 'risk_manager':
+        return check_permission(user.role, permission)
+    elif user.role == 'branch_manager':
+        return risk.branch_id == user.branch_id and check_permission(user.role, permission)
+    elif user.role == 'auditor':
+        return check_permission(user.role, permission)
+    return False
 
 
 # Error handlers

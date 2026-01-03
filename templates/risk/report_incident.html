@@ -1,0 +1,1179 @@
+{% extends "base.html" %}
+
+{% block title %}تقرير حادث مخاطر{% endblock %}
+
+{% block extra_css %}
+<style>
+    .incident-form-section {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    }
+    
+    .severity-indicator {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        margin-left: 10px;
+    }
+    
+    .severity-low { background-color: #16a34a; }
+    .severity-medium { background-color: #ca8a04; }
+    .severity-high { background-color: #ea580c; }
+    .severity-critical { background-color: #dc2626; }
+    
+    .form-step {
+        display: none;
+        animation: fadeIn 0.5s ease;
+    }
+    
+    .form-step.active {
+        display: block;
+    }
+    
+    .step-indicator {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        border: 2px solid #e5e7eb;
+        background-color: white;
+        transition: all 0.3s ease;
+    }
+    
+    .step-indicator.active {
+        border-color: #3b82f6;
+        background-color: #3b82f6;
+        color: white;
+    }
+    
+    .step-indicator.completed {
+        border-color: #10b981;
+        background-color: #10b981;
+        color: white;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .incident-preview {
+        border-right: 4px solid;
+        padding-right: 1rem;
+    }
+    
+    .preview-critical { border-right-color: #dc2626; background-color: #fef2f2; }
+    .preview-high { border-right-color: #ea580c; background-color: #fffbeb; }
+    .preview-medium { border-right-color: #ca8a04; background-color: #fefce8; }
+    .preview-low { border-right-color: #16a34a; background-color: #f0fdf4; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate__animated animate__fadeIn">
+    <!-- Breadcrumb -->
+    <nav class="mb-6">
+        <ol class="flex items-center space-x-2 space-x-reverse text-sm text-gray-600">
+            <li>
+                <a href="{{ url_for('risk_dashboard') }}" class="hover:text-blue-600 transition-colors">
+                    <i class="fas fa-shield-alt ml-2"></i>
+                    إدارة المخاطر
+                </a>
+            </li>
+            <li>
+                <i class="fas fa-chevron-left"></i>
+            </li>
+            <li>
+                <a href="{{ url_for('risk_incidents') }}" class="hover:text-blue-600 transition-colors">
+                    حوادث المخاطر
+                </a>
+            </li>
+            <li>
+                <i class="fas fa-chevron-left"></i>
+            </li>
+            <li class="text-blue-600 font-medium">
+                تقرير حادث جديد
+            </li>
+        </ol>
+    </nav>
+    
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-2">تقرير حادث مخاطر</h1>
+                <p class="text-gray-600">أبلغ عن حادث مخاطر وفق معايير الإبلاغ المعتمدة</p>
+            </div>
+            
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <button onclick="window.history.back()" 
+                        class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center">
+                    <i class="fas fa-arrow-right ml-2"></i>
+                    رجوع
+                </button>
+                
+                <button onclick="saveDraft()"
+                        class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition flex items-center">
+                    <i class="fas fa-save ml-2"></i>
+                    حفظ مسودة
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Multi-step Form -->
+    <div class="bg-white rounded-xl shadow mb-6">
+        <!-- Form Steps Navigation -->
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-6 space-x-reverse">
+                    <div class="flex flex-col items-center">
+                        <div id="step1-indicator" class="step-indicator active">1</div>
+                        <span class="text-sm text-gray-600 mt-2">معلومات أساسية</span>
+                    </div>
+                    
+                    <div class="h-1 w-12 bg-gray-200"></div>
+                    
+                    <div class="flex flex-col items-center">
+                        <div id="step2-indicator" class="step-indicator">2</div>
+                        <span class="text-sm text-gray-600 mt-2">تفاصيل الحادث</span>
+                    </div>
+                    
+                    <div class="h-1 w-12 bg-gray-200"></div>
+                    
+                    <div class="flex flex-col items-center">
+                        <div id="step3-indicator" class="step-indicator">3</div>
+                        <span class="text-sm text-gray-600 mt-2">التأثير والتحليل</span>
+                    </div>
+                    
+                    <div class="h-1 w-12 bg-gray-200"></div>
+                    
+                    <div class="flex flex-col items-center">
+                        <div id="step4-indicator" class="step-indicator">4</div>
+                        <span class="text-sm text-gray-600 mt-2">مراجعة وتأكيد</span>
+                    </div>
+                </div>
+                
+                <div class="text-right">
+                    <span id="step-title" class="font-bold text-gray-800">المعلومات الأساسية</span>
+                    <p id="step-description" class="text-sm text-gray-600">أدخل المعلومات الأساسية للحادث</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Form Content -->
+        <div class="p-6">
+            <!-- Step 1: Basic Information -->
+            <form id="incident-form">
+                <div id="step1" class="form-step active">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="space-y-6">
+                            <!-- Incident Title -->
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">عنوان الحادث *</label>
+                                <input type="text" 
+                                       id="incident-title"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                       placeholder="أدخل عنوانًا وصفيًا للحادث"
+                                       required>
+                                <p class="text-sm text-gray-600 mt-1">مثال: تعثر سداد قرض تجاري بقيمة 500,000 ر.س</p>
+                            </div>
+                            
+                            <!-- Incident Category -->
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">تصنيف الحادث *</label>
+                                <select id="incident-category"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                        required>
+                                    <option value="">اختر تصنيف الحادث</option>
+                                    {% for category in risk_categories %}
+                                    <option value="{{ category.id }}">{{ category.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Branch -->
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">الفرع *</label>
+                                <select id="incident-branch"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                        required>
+                                    <option value="">اختر الفرع</option>
+                                    {% for branch in branches %}
+                                    <option value="{{ branch.id }}">{{ branch.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Dates -->
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-gray-700 mb-2 font-medium">تاريخ وقوع الحادث *</label>
+                                    <input type="date" 
+                                           id="incident-date"
+                                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                           required>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-gray-700 mb-2 font-medium">تاريخ الاكتشاف</label>
+                                    <input type="date" 
+                                           id="discovery-date"
+                                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-6">
+                            <!-- Incident Description -->
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">وصف تفصيلي للحادث *</label>
+                                <textarea id="incident-description"
+                                          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                          rows="8"
+                                          placeholder="صف الحادث بتفصيل شامل، متضمنًا الظروف والأشخاص المعنيين"
+                                          required></textarea>
+                                <p class="text-sm text-gray-600 mt-1">استخدم وصفًا واضحًا وشاملاً يسهل فهمه</p>
+                            </div>
+                            
+                            <!-- Severity -->
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">خطورة الحادث *</label>
+                                <div class="grid grid-cols-4 gap-2">
+                                    <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input type="radio" name="severity" value="low" class="ml-2">
+                                        <div class="flex items-center">
+                                            <div class="severity-indicator severity-low"></div>
+                                            <span>منخفض</span>
+                                        </div>
+                                    </label>
+                                    
+                                    <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input type="radio" name="severity" value="medium" class="ml-2" checked>
+                                        <div class="flex items-center">
+                                            <div class="severity-indicator severity-medium"></div>
+                                            <span>متوسط</span>
+                                        </div>
+                                    </label>
+                                    
+                                    <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input type="radio" name="severity" value="high" class="ml-2">
+                                        <div class="flex items-center">
+                                            <div class="severity-indicator severity-high"></div>
+                                            <span>مرتفع</span>
+                                        </div>
+                                    </label>
+                                    
+                                    <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input type="radio" name="severity" value="critical" class="ml-2">
+                                        <div class="flex items-center">
+                                            <div class="severity-indicator severity-critical"></div>
+                                            <span>حرج</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between mt-8">
+                        <div></div>
+                        <button type="button" onclick="nextStep(2)"
+                                class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                            <span>التالي</span>
+                            <i class="fas fa-arrow-left ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Step 2: Incident Details -->
+                <div id="step2" class="form-step">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="space-y-6">
+                            <!-- Root Cause Analysis -->
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">السبب الجذري</label>
+                                <textarea id="root-cause"
+                                          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                          rows="6"
+                                          placeholder="حدد السبب الجذري للحادث (لماذا حدث؟)"></textarea>
+                                <p class="text-sm text-gray-600 mt-1">تحليل السبب الأساسي الذي أدى إلى وقوع الحادث</p>
+                            </div>
+                            
+                            <!-- Contributing Factors -->
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">العوامل المساعدة</label>
+                                <textarea id="contributing-factors"
+                                          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                          rows="4"
+                                          placeholder="العوامل التي ساهمت في حدوث الحادث"></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-6">
+                            <!-- Basel III Category -->
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">تصنيف Basel III</label>
+                                <select id="basel-category"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="">اختر تصنيف Basel III</option>
+                                    <option value="credit_risk">مخاطر الائتمان</option>
+                                    <option value="market_risk">مخاطر السوق</option>
+                                    <option value="operational_risk">مخاطر التشغيل</option>
+                                    <option value="liquidity_risk">مخاطر السيولة</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Regulatory Reporting -->
+                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <label class="block text-gray-700 mb-1 font-medium">إبلاغ تنظيمي مطلوب</label>
+                                    <p class="text-sm text-gray-600">هل يتطلب الحادث إبلاغًا تنظيميًا؟</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="regulatory-reporting">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <!-- Assigned To -->
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">تعيين للمتابعة</label>
+                                <select id="assigned-to"
+                                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                                    <option value="">اختر مسؤول المتابعة</option>
+                                    {% for user in users %}
+                                    {% if user.role in ['admin', 'risk_manager'] %}
+                                    <option value="{{ user.id }}">{{ user.username }} ({{ user.role_ar }})</option>
+                                    {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Immediate Actions -->
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">الإجراءات الفورية المتخذة</label>
+                                <textarea id="immediate-actions"
+                                          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                          rows="4"
+                                          placeholder="الإجراءات التي تم اتخاذها فور اكتشاف الحادث"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between mt-8">
+                        <button type="button" onclick="prevStep()"
+                                class="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center">
+                            <i class="fas fa-arrow-right ml-2"></i>
+                            <span>السابق</span>
+                        </button>
+                        
+                        <button type="button" onclick="nextStep(3)"
+                                class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                            <span>التالي</span>
+                            <i class="fas fa-arrow-left ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Step 3: Impact Analysis -->
+                <div id="step3" class="form-step">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Financial Impact -->
+                        <div class="incident-form-section p-6 rounded-xl border">
+                            <h4 class="font-bold text-gray-800 mb-4 flex items-center">
+                                <i class="fas fa-money-bill-wave text-green-600 ml-3"></i>
+                                الأثر المالي
+                            </h4>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-gray-700 mb-2">القيمة المالية (ر.س)</label>
+                                    <div class="relative">
+                                        <input type="number" 
+                                               step="0.01" 
+                                               min="0"
+                                               id="financial-impact"
+                                               class="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                               placeholder="0.00">
+                                        <span class="absolute left-3 top-3 text-gray-500">ر.س</span>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-gray-700 mb-2">نوع الخسارة</label>
+                                    <select id="loss-type"
+                                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                                        <option value="">اختر نوع الخسارة</option>
+                                        <option value="direct_loss">خسارة مباشرة</option>
+                                        <option value="indirect_loss">خسارة غير مباشرة</option>
+                                        <option value="potential_loss">خسارة محتملة</option>
+                                        <option value="recovery">مبلغ مسترد</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-gray-700 mb-2">مصدر التعويض</label>
+                                    <input type="text" 
+                                           id="recovery-source"
+                                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                           placeholder="التأمين، الضمانات، إلخ">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Operational Impact -->
+                        <div class="incident-form-section p-6 rounded-xl border">
+                            <h4 class="font-bold text-gray-800 mb-4 flex items-center">
+                                <i class="fas fa-cogs text-blue-600 ml-3"></i>
+                                الأثر التشغيلي
+                            </h4>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-gray-700 mb-2">مدة التعطيل (ساعات)</label>
+                                    <input type="number" 
+                                           min="0"
+                                           id="downtime-hours"
+                                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                           placeholder="0">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-gray-700 mb-2">الأنظمة المتأثرة</label>
+                                    <textarea id="affected-systems"
+                                              class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                              rows="3"
+                                              placeholder="الأنظمة أو العمليات التي تأثرت"></textarea>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-gray-700 mb-2">عدد العملاء المتأثرين</label>
+                                    <input type="number" 
+                                           min="0"
+                                           id="affected-customers"
+                                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                           placeholder="0">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Reputational Impact -->
+                        <div class="incident-form-section p-6 rounded-xl border">
+                            <h4 class="font-bold text-gray-800 mb-4 flex items-center">
+                                <i class="fas fa-star text-yellow-600 ml-3"></i>
+                                الأثر على السمعة
+                            </h4>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-gray-700 mb-2">مستوى التأثير على السمعة</label>
+                                    <select id="reputational-impact-level"
+                                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                                        <option value="">اختر مستوى التأثير</option>
+                                        <option value="low">منخفض (تأثير محدود)</option>
+                                        <option value="medium">متوسط (تأثير على مجموعة صغيرة)</option>
+                                        <option value="high">مرتفع (تأثير واسع)</option>
+                                        <option value="critical">حرج (تأثير استراتيجي)</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-gray-700 mb-2">وسائل الإعلام المتأثرة</label>
+                                    <textarea id="media-impact"
+                                              class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                              rows="3"
+                                              placeholder="وسائل الإعلام التي تناولت الحادث"></textarea>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-gray-700 mb-2">إجراءات حماية السمعة</label>
+                                    <textarea id="reputation-protection"
+                                              class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                              rows="3"
+                                              placeholder="الإجراءات المتخذة لحماية السمعة"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between mt-8">
+                        <button type="button" onclick="prevStep()"
+                                class="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center">
+                            <i class="fas fa-arrow-right ml-2"></i>
+                            <span>السابق</span>
+                        </button>
+                        
+                        <button type="button" onclick="nextStep(4)"
+                                class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                            <span>التالي</span>
+                            <i class="fas fa-arrow-left ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Step 4: Review and Submit -->
+                <div id="step4" class="form-step">
+                    <div class="mb-6">
+                        <h4 class="font-bold text-gray-800 mb-4 text-center">مراجعة وتأكيد تقرير الحادث</h4>
+                        <p class="text-gray-600 text-center mb-6">يرجى مراجعة المعلومات المدخلة قبل الإرسال</p>
+                        
+                        <!-- Incident Preview -->
+                        <div id="incident-preview" class="incident-preview p-6 rounded-xl mb-6">
+                            <!-- Preview will be populated by JavaScript -->
+                        </div>
+                        
+                        <!-- Confidentiality Agreement -->
+                        <div class="bg-blue-50 p-4 rounded-lg mb-6">
+                            <div class="flex items-start">
+                                <i class="fas fa-shield-alt text-blue-600 mt-1 ml-3"></i>
+                                <div>
+                                    <p class="font-medium text-blue-800">اتفاقية السرية والالتزام</p>
+                                    <p class="text-sm text-blue-600 mt-1">
+                                        أؤكد أن جميع المعلومات الواردة في هذا التقرير صحيحة وكاملة إلى أفضل معرفتي.
+                                        وأتعهد بالحفاظ على سرية المعلومات المتعلقة بهذا الحادث وفق سياسات المؤسسة.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Final Actions -->
+                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg mb-6">
+                            <div class="flex items-center">
+                                <input type="checkbox" id="confirmation-check" class="ml-2 w-5 h-5">
+                                <label for="confirmation-check" class="text-gray-700 font-medium">
+                                    أوافق على الشروط وأؤكد دقة المعلومات
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center space-x-2 space-x-reverse">
+                                <i class="fas fa-history text-gray-400"></i>
+                                <span class="text-sm text-gray-600">آخر تحديث: <span id="last-update-time">الآن</span></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between mt-8">
+                        <button type="button" onclick="prevStep()"
+                                class="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center">
+                            <i class="fas fa-arrow-right ml-2"></i>
+                            <span>السابق</span>
+                        </button>
+                        
+                        <div class="flex space-x-3 space-x-reverse">
+                            <button type="button" onclick="saveDraft()"
+                                    class="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition flex items-center">
+                                <i class="fas fa-save ml-2"></i>
+                                <span>حفظ مسودة</span>
+                            </button>
+                            
+                            <button type="button" onclick="submitIncidentReport()" id="submit-button"
+                                    class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center"
+                                    disabled>
+                                <i class="fas fa-paper-plane ml-2"></i>
+                                <span>إرسال التقرير</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Help Information -->
+    <div class="bg-white rounded-xl shadow p-6">
+        <h4 class="font-bold text-gray-800 mb-4 flex items-center">
+            <i class="fas fa-question-circle text-blue-600 ml-3"></i>
+            معلومات مساعدة
+        </h4>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="p-4 bg-blue-50 rounded-lg">
+                <h5 class="font-medium text-blue-800 mb-2">متى يجب الإبلاغ؟</h5>
+                <p class="text-sm text-blue-700">
+                    يجب الإبلاغ عن أي حادث يؤثر على العمليات أو المالية أو السمعة خلال 24 ساعة من الاكتشاف.
+                </p>
+            </div>
+            
+            <div class="p-4 bg-green-50 rounded-lg">
+                <h5 class="font-medium text-green-800 mb-2">معلومات مطلوبة</h5>
+                <p class="text-sm text-green-700">
+                    تأكد من تضمين جميع التفاصيل الدقيقة: ماذا حدث، متى، أين، ولماذا، ومن المتأثر.
+                </p>
+            </div>
+            
+            <div class="p-4 bg-purple-50 rounded-lg">
+                <h5 class="font-medium text-purple-800 mb-2">الدعم الفني</h5>
+                <p class="text-sm text-purple-700">
+                    للحصول على مساعدة فنية، اتصل بقسم إدارة المخاطر على الرقم الداخلي 1234.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Modal -->
+<div id="success-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md animate__animated animate__zoomIn">
+        <div class="p-6">
+            <div class="text-center">
+                <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i class="fas fa-check text-3xl text-green-600"></i>
+                </div>
+                
+                <h3 class="text-xl font-bold text-gray-800 mb-2" id="success-title">تم الإرسال بنجاح</h3>
+                <p class="text-gray-600 mb-6" id="success-message">تم إرسال تقرير الحادث بنجاح</p>
+                
+                <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-gray-600">رقم التقرير:</span>
+                        <span class="font-bold text-blue-600" id="incident-number">INC-000001</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">تاريخ الإرسال:</span>
+                        <span class="font-medium" id="submission-date">{{ now().strftime('%Y-%m-%d %H:%M') }}</span>
+                    </div>
+                </div>
+                
+                <div class="flex space-x-3 space-x-reverse">
+                    <button onclick="closeSuccessModal()"
+                            class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                        إغلاق
+                    </button>
+                    <button onclick="printReport()"
+                            class="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center">
+                        <i class="fas fa-print ml-2"></i>
+                        طباعة
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Form state
+    let currentStep = 1;
+    let formData = {};
+    let draftId = null;
+    
+    // Initialize form
+    document.addEventListener('DOMContentLoaded', function() {
+        updateStepIndicators();
+        setupFormValidation();
+        updateLastUpdateTime();
+        
+        // Load draft if exists
+        loadDraft();
+    });
+    
+    // Navigation functions
+    function nextStep(step) {
+        // Validate current step before proceeding
+        if (!validateStep(currentStep)) {
+            return;
+        }
+        
+        // Save step data
+        saveStepData(currentStep);
+        
+        // Hide current step
+        document.getElementById(`step${currentStep}`).classList.remove('active');
+        document.getElementById(`step${currentStep}-indicator`).classList.remove('active');
+        
+        // Show next step
+        currentStep = step;
+        document.getElementById(`step${currentStep}`).classList.add('active');
+        document.getElementById(`step${currentStep}-indicator`).classList.add('active');
+        
+        // Update step indicator for previous step
+        document.getElementById(`step${step-1}-indicator`).classList.add('completed');
+        
+        // Update step info
+        updateStepInfo();
+        
+        // Update preview on step 4
+        if (step === 4) {
+            updateIncidentPreview();
+        }
+    }
+    
+    function prevStep() {
+        // Hide current step
+        document.getElementById(`step${currentStep}`).classList.remove('active');
+        document.getElementById(`step${currentStep}-indicator`).classList.remove('active');
+        document.getElementById(`step${currentStep}-indicator`).classList.remove('completed');
+        
+        // Show previous step
+        currentStep--;
+        document.getElementById(`step${currentStep}`).classList.add('active');
+        document.getElementById(`step${currentStep}-indicator`).classList.add('active');
+        
+        // Update step info
+        updateStepInfo();
+    }
+    
+    function updateStepIndicators() {
+        for (let i = 1; i <= 4; i++) {
+            const indicator = document.getElementById(`step${i}-indicator`);
+            if (i < currentStep) {
+                indicator.classList.add('completed');
+                indicator.classList.remove('active');
+            } else if (i === currentStep) {
+                indicator.classList.add('active');
+                indicator.classList.remove('completed');
+            } else {
+                indicator.classList.remove('active', 'completed');
+            }
+        }
+    }
+    
+    function updateStepInfo() {
+        const steps = {
+            1: { title: 'المعلومات الأساسية', description: 'أدخل المعلومات الأساسية للحادث' },
+            2: { title: 'تفاصيل الحادث', description: 'أضف التفاصيل والتحليل' },
+            3: { title: 'التأثير والتحليل', description: 'قيّم الأثر المالي والتشغيلي' },
+            4: { title: 'مراجعة وتأكيد', description: 'راجع المعلومات وأرسل التقرير' }
+        };
+        
+        const step = steps[currentStep];
+        document.getElementById('step-title').textContent = step.title;
+        document.getElementById('step-description').textContent = step.description;
+    }
+    
+    // Form validation
+    function validateStep(step) {
+        switch(step) {
+            case 1:
+                return validateStep1();
+            case 2:
+                return validateStep2();
+            case 3:
+                return validateStep3();
+            default:
+                return true;
+        }
+    }
+    
+    function validateStep1() {
+        const title = document.getElementById('incident-title').value.trim();
+        const category = document.getElementById('incident-category').value;
+        const branch = document.getElementById('incident-branch').value;
+        const date = document.getElementById('incident-date').value;
+        const description = document.getElementById('incident-description').value.trim();
+        const severity = document.querySelector('input[name="severity"]:checked');
+        
+        if (!title) {
+            alert('يرجى إدخال عنوان الحادث');
+            return false;
+        }
+        if (!category) {
+            alert('يرجى اختيار تصنيف الحادث');
+            return false;
+        }
+        if (!branch) {
+            alert('يرجى اختيار الفرع');
+            return false;
+        }
+        if (!date) {
+            alert('يرجى اختيار تاريخ وقوع الحادث');
+            return false;
+        }
+        if (!description) {
+            alert('يرجى إدخال وصف الحادث');
+            return false;
+        }
+        if (!severity) {
+            alert('يرجى اختيار خطورة الحادث');
+            return false;
+        }
+        
+        return true;
+    }
+    
+    function validateStep2() {
+        // Step 2 is optional, but we should validate required fields if any
+        return true;
+    }
+    
+    function validateStep3() {
+        // Step 3 is also optional
+        return true;
+    }
+    
+    function setupFormValidation() {
+        // Real-time validation for required fields
+        const requiredFields = [
+            'incident-title',
+            'incident-category',
+            'incident-branch',
+            'incident-date',
+            'incident-description'
+        ];
+        
+        requiredFields.forEach(fieldId => {
+            const field = document.getElementById(fieldId);
+            if (field) {
+                field.addEventListener('blur', function() {
+                    validateField(this);
+                });
+            }
+        });
+    }
+    
+    function validateField(field) {
+        if (field.hasAttribute('required') && !field.value.trim()) {
+            field.classList.add('border-red-500');
+            field.classList.remove('border-gray-300');
+            return false;
+        } else {
+            field.classList.remove('border-red-500');
+            field.classList.add('border-gray-300');
+            return true;
+        }
+    }
+    
+    // Data management
+    function saveStepData(step) {
+        switch(step) {
+            case 1:
+                formData.title = document.getElementById('incident-title').value.trim();
+                formData.category_id = document.getElementById('incident-category').value;
+                formData.branch_id = document.getElementById('incident-branch').value;
+                formData.incident_date = document.getElementById('incident-date').value;
+                formData.discovery_date = document.getElementById('discovery-date').value;
+                formData.description = document.getElementById('incident-description').value.trim();
+                formData.severity = document.querySelector('input[name="severity"]:checked')?.value;
+                break;
+                
+            case 2:
+                formData.root_cause = document.getElementById('root-cause').value.trim();
+                formData.contributing_factors = document.getElementById('contributing-factors').value.trim();
+                formData.basel_category = document.getElementById('basel-category').value;
+                formData.regulatory_reporting = document.getElementById('regulatory-reporting').checked;
+                formData.assigned_to_id = document.getElementById('assigned-to').value;
+                formData.immediate_actions = document.getElementById('immediate-actions').value.trim();
+                break;
+                
+            case 3:
+                formData.financial_impact = parseFloat(document.getElementById('financial-impact').value) || 0;
+                formData.loss_type = document.getElementById('loss-type').value;
+                formData.recovery_source = document.getElementById('recovery-source').value.trim();
+                formData.downtime_hours = parseInt(document.getElementById('downtime-hours').value) || 0;
+                formData.affected_systems = document.getElementById('affected-systems').value.trim();
+                formData.affected_customers = parseInt(document.getElementById('affected-customers').value) || 0;
+                formData.reputational_impact_level = document.getElementById('reputational-impact-level').value;
+                formData.media_impact = document.getElementById('media-impact').value.trim();
+                formData.reputation_protection = document.getElementById('reputation-protection').value.trim();
+                break;
+        }
+        
+        // Update last update time
+        updateLastUpdateTime();
+        
+        // Auto-save draft
+        saveDraftToLocal();
+    }
+    
+    function updateIncidentPreview() {
+        const preview = document.getElementById('incident-preview');
+        const severity = formData.severity || 'medium';
+        
+        // Set preview class based on severity
+        preview.className = `incident-preview p-6 rounded-xl mb-6 preview-${severity}`;
+        
+        // Format dates
+        const incidentDate = formData.incident_date ? new Date(formData.incident_date).toLocaleDateString('ar-SA') : 'غير محدد';
+        const discoveryDate = formData.discovery_date ? new Date(formData.discovery_date).toLocaleDateString('ar-SA') : 'غير محدد';
+        
+        // Get category name
+        const categorySelect = document.getElementById('incident-category');
+        const categoryName = categorySelect.options[categorySelect.selectedIndex]?.text || 'غير مصنف';
+        
+        // Get branch name
+        const branchSelect = document.getElementById('incident-branch');
+        const branchName = branchSelect.options[branchSelect.selectedIndex]?.text || 'غير محدد';
+        
+        // Severity Arabic text
+        const severityAr = {
+            'low': 'منخفض',
+            'medium': 'متوسط',
+            'high': 'مرتفع',
+            'critical': 'حرج'
+        }[severity] || severity;
+        
+        preview.innerHTML = `
+            <div class="mb-4">
+                <h5 class="font-bold text-lg mb-2">${formData.title || 'بدون عنوان'}</h5>
+                <div class="flex flex-wrap gap-2 mb-3">
+                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        ${categoryName}
+                    </span>
+                    <span class="px-3 py-1 rounded-full text-xs font-medium ${getSeverityClass(severity)}">
+                        ${severityAr}
+                    </span>
+                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        ${branchName}
+                    </span>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <p class="text-sm text-gray-600 mb-1">تاريخ الوقوع:</p>
+                    <p class="font-medium">${incidentDate}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600 mb-1">تاريخ الاكتشاف:</p>
+                    <p class="font-medium">${discoveryDate}</p>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <p class="text-sm text-gray-600 mb-1">الوصف:</p>
+                <p class="text-gray-800">${formData.description || 'لا يوجد وصف'}</p>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-4">
+                <div>
+                    <p class="text-sm text-gray-600 mb-1">الأثر المالي:</p>
+                    <p class="font-bold ${formData.financial_impact > 0 ? 'text-red-600' : 'text-gray-600'}">
+                        ${formData.financial_impact ? formData.financial_impact.toLocaleString('ar-SA') + ' ر.س' : 'غير محدد'}
+                    </p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600 mb-1">مدة التعطيل:</p>
+                    <p class="font-medium">${formData.downtime_hours || 0} ساعة</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600 mb-1">الإبلاغ التنظيمي:</p>
+                    <p class="font-medium">${formData.regulatory_reporting ? 'مطلوب' : 'غير مطلوب'}</p>
+                </div>
+            </div>
+        `;
+    }
+    
+    function getSeverityClass(severity) {
+        switch(severity) {
+            case 'low': return 'bg-green-100 text-green-800';
+            case 'medium': return 'bg-yellow-100 text-yellow-800';
+            case 'high': return 'bg-orange-100 text-orange-800';
+            case 'critical': return 'bg-red-100 text-red-800';
+            default: return 'bg-gray-100 text-gray-800';
+        }
+    }
+    
+    // Submission
+    function submitIncidentReport() {
+        // Check confirmation
+        if (!document.getElementById('confirmation-check').checked) {
+            alert('يرجى الموافقة على الشروط وتأكيد دقة المعلومات');
+            return;
+        }
+        
+        // Validate all data
+        if (!validateStep(1) || !formData.title || !formData.category_id || !formData.branch_id || !formData.incident_date) {
+            alert('يرجى استكمال المعلومات الأساسية المطلوبة');
+            nextStep(1);
+            return;
+        }
+        
+        // Prepare data for submission
+        const submissionData = {
+            ...formData,
+            reported_by_id: {{ current_user.id }},
+            status: 'open',
+            investigation_status: 'pending'
+        };
+        
+        // Show loading
+        const submitBtn = document.getElementById('submit-button');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري الإرسال...';
+        submitBtn.disabled = true;
+        
+        // Submit to API
+        fetch('/api/incidents/report', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(submissionData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Clear draft
+                clearDraft();
+                
+                // Show success modal
+                document.getElementById('incident-number').textContent = data.incident_number || `INC-${data.incident_id.toString().padStart(6, '0')}`;
+                document.getElementById('success-modal').classList.remove('hidden');
+                
+                // Update submission date
+                document.getElementById('submission-date').textContent = new Date().toLocaleString('ar-SA');
+            } else {
+                alert(data.error || 'حدث خطأ أثناء إرسال التقرير');
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('خطأ في الاتصال بالخادم');
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        });
+    }
+    
+    // Draft functionality
+    function saveDraft() {
+        saveStepData(currentStep);
+        saveDraftToLocal();
+        
+        // Show notification
+        showToast('تم حفظ المسودة بنجاح');
+    }
+    
+    function saveDraftToLocal() {
+        const draft = {
+            formData: formData,
+            currentStep: currentStep,
+            timestamp: new Date().toISOString()
+        };
+        
+        localStorage.setItem('incident_report_draft', JSON.stringify(draft));
+        draftId = 'local_' + Date.now();
+    }
+    
+    function loadDraft() {
+        const draftJson = localStorage.getItem('incident_report_draft');
+        if (draftJson) {
+            try {
+                const draft = JSON.parse(draftJson);
+                formData = draft.formData || {};
+                currentStep = draft.currentStep || 1;
+                
+                // Load data into form
+                loadFormData();
+                
+                // Update UI
+                updateStepIndicators();
+                updateStepInfo();
+                
+                // Show draft loaded notification
+                showToast('تم تحميل المسودة المحفوظة');
+            } catch (error) {
+                console.error('Error loading draft:', error);
+            }
+        }
+    }
+    
+    function loadFormData() {
+        // Step 1
+        if (formData.title) document.getElementById('incident-title').value = formData.title;
+        if (formData.category_id) document.getElementById('incident-category').value = formData.category_id;
+        if (formData.branch_id) document.getElementById('incident-branch').value = formData.branch_id;
+        if (formData.incident_date) document.getElementById('incident-date').value = formData.incident_date;
+        if (formData.discovery_date) document.getElementById('discovery-date').value = formData.discovery_date;
+        if (formData.description) document.getElementById('incident-description').value = formData.description;
+        if (formData.severity) {
+            document.querySelector(`input[name="severity"][value="${formData.severity}"]`).checked = true;
+        }
+        
+        // Step 2
+        if (formData.root_cause) document.getElementById('root-cause').value = formData.root_cause;
+        if (formData.contributing_factors) document.getElementById('contributing-factors').value = formData.contributing_factors;
+        if (formData.basel_category) document.getElementById('basel-category').value = formData.basel_category;
+        if (formData.regulatory_reporting) document.getElementById('regulatory-reporting').checked = formData.regulatory_reporting;
+        if (formData.assigned_to_id) document.getElementById('assigned-to').value = formData.assigned_to_id;
+        if (formData.immediate_actions) document.getElementById('immediate-actions').value = formData.immediate_actions;
+        
+        // Step 3
+        if (formData.financial_impact) document.getElementById('financial-impact').value = formData.financial_impact;
+        if (formData.loss_type) document.getElementById('loss-type').value = formData.loss_type;
+        if (formData.recovery_source) document.getElementById('recovery-source').value = formData.recovery_source;
+        if (formData.downtime_hours) document.getElementById('downtime-hours').value = formData.downtime_hours;
+        if (formData.affected_systems) document.getElementById('affected-systems').value = formData.affected_systems;
+        if (formData.affected_customers) document.getElementById('affected-customers').value = formData.affected_customers;
+        if (formData.reputational_impact_level) document.getElementById('reputational-impact-level').value = formData.reputational_impact_level;
+        if (formData.media_impact) document.getElementById('media-impact').value = formData.media_impact;
+        if (formData.reputation_protection) document.getElementById('reputation-protection').value = formData.reputation_protection;
+    }
+    
+    function clearDraft() {
+        localStorage.removeItem('incident_report_draft');
+        formData = {};
+        draftId = null;
+    }
+    
+    // Update last update time
+    function updateLastUpdateTime() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'});
+        document.getElementById('last-update-time').textContent = timeString;
+    }
+    
+    // Modal functions
+    function closeSuccessModal() {
+        document.getElementById('success-modal').classList.add('hidden');
+        
+        // Redirect to incidents page after delay
+        setTimeout(() => {
+            window.location.href = "{{ url_for('risk_incidents') }}";
+        }, 500);
+    }
+    
+    function printReport() {
+        // In a real app, generate printable report
+        alert('جاري طباعة التقرير...');
+    }
+    
+    // Confirmation checkbox handler
+    document.getElementById('confirmation-check').addEventListener('change', function() {
+        document.getElementById('submit-button').disabled = !this.checked;
+    });
+    
+    // Auto-save on form changes
+    const formElements = document.querySelectorAll('#incident-form input, #incident-form select, #incident-form textarea');
+    formElements.forEach(element => {
+        element.addEventListener('change', function() {
+            saveStepData(currentStep);
+        });
+        
+        // For text inputs, save on blur
+        if (element.tagName === 'INPUT' && element.type === 'text') {
+            element.addEventListener('blur', function() {
+                saveStepData(currentStep);
+            });
+        }
+    });
+    
+    // Toast notification
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'fixed bottom-4 left-4 z-50 p-4 bg-gray-800 text-white rounded-lg shadow-xl animate__animated animate__fadeInUp';
+        toast.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-info-circle ml-3 text-blue-400"></i>
+                <span>${message}</span>
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.classList.add('animate__fadeOutDown');
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.remove();
+                }
+            }, 500);
+        }, 3000);
+    }
+</script>
+{% endblock %}

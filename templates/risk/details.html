@@ -1,0 +1,1565 @@
+{% extends "base.html" %}
+
+{% block title %}تفاصيل المخاطرة - {{ risk.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .risk-detail-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    }
+    
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .status-open { background-color: #fef3c7; color: #92400e; }
+    .status-in_progress { background-color: #dbeafe; color: #1e40af; }
+    .status-mitigated { background-color: #d1fae5; color: #065f46; }
+    .status-closed { background-color: #f3f4f6; color: #374151; }
+    
+    .priority-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .priority-critical { background-color: #fee2e2; color: #991b1b; }
+    .priority-high { background-color: #ffedd5; color: #9a3412; }
+    .priority-medium { background-color: #fef3c7; color: #92400e; }
+    .priority-low { background-color: #dcfce7; color: #166534; }
+    
+    .progress-bar {
+        height: 0.5rem;
+        border-radius: 0.25rem;
+        overflow: hidden;
+        background-color: #e5e7eb;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        border-radius: 0.25rem;
+        transition: width 0.5s ease;
+    }
+    
+    .timeline {
+        position: relative;
+        padding-right: 2rem;
+    }
+    
+    .timeline::before {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background-color: #e5e7eb;
+    }
+    
+    .timeline-item {
+        position: relative;
+        padding-bottom: 1.5rem;
+        padding-right: 2rem;
+    }
+    
+    .timeline-item:last-child {
+        padding-bottom: 0;
+    }
+    
+    .timeline-dot {
+        position: absolute;
+        right: -0.5rem;
+        top: 0;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        border: 3px solid white;
+        z-index: 1;
+    }
+    
+    .comment-bubble {
+        position: relative;
+        background-color: #f3f4f6;
+        border-radius: 1rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .comment-bubble::before {
+        content: '';
+        position: absolute;
+        right: -0.5rem;
+        top: 1rem;
+        width: 1rem;
+        height: 1rem;
+        background-color: #f3f4f6;
+        transform: rotate(45deg);
+    }
+    
+    .risk-score-gauge {
+        width: 120px;
+        height: 60px;
+        position: relative;
+    }
+    
+    .gauge-background {
+        width: 120px;
+        height: 60px;
+        border-radius: 120px 120px 0 0;
+        overflow: hidden;
+        position: absolute;
+        top: 0;
+        right: 0;
+    }
+    
+    .gauge-fill {
+        width: 120px;
+        height: 60px;
+        border-radius: 120px 120px 0 0;
+        transform-origin: center bottom;
+        position: absolute;
+        top: 0;
+        right: 0;
+    }
+    
+    .gauge-cover {
+        width: 90px;
+        height: 45px;
+        background-color: white;
+        border-radius: 90px 90px 0 0;
+        position: absolute;
+        top: 15px;
+        right: 15px;
+    }
+    
+    .gauge-value {
+        position: absolute;
+        top: 25px;
+        right: 0;
+        left: 0;
+        text-align: center;
+        font-weight: bold;
+        font-size: 1.25rem;
+    }
+    
+    .matrix-cell {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .matrix-cell:hover {
+        transform: scale(1.1);
+        z-index: 10;
+    }
+    
+    .matrix-current {
+        box-shadow: 0 0 0 3px #3b82f6;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+        70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+    }
+    
+    .action-card {
+        border-left: 4px solid;
+        transition: all 0.3s ease;
+    }
+    
+    .action-card:hover {
+        transform: translateX(-5px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .action-pending { border-left-color: #f59e0b; }
+    .action-in_progress { border-left-color: #3b82f6; }
+    .action-completed { border-left-color: #10b981; }
+    .action-cancelled { border-left-color: #6b7280; }
+    
+    .control-card {
+        border-right: 4px solid;
+        transition: all 0.3s ease;
+    }
+    
+    .control-card:hover {
+        transform: translateX(5px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .control-preventive { border-right-color: #10b981; }
+    .control-detective { border-right-color: #3b82f6; }
+    .control-corrective { border-right-color: #f59e0b; }
+    
+    .tab-button {
+        border-bottom: 3px solid transparent;
+        padding: 0.75rem 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .tab-button.active {
+        border-bottom-color: #3b82f6;
+        color: #3b82f6;
+        font-weight: 600;
+    }
+    
+    .financial-impact {
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    }
+    
+    .basel-compliance {
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate__animated animate__fadeIn">
+    <!-- Breadcrumb -->
+    <nav class="mb-6">
+        <ol class="flex items-center space-x-2 space-x-reverse text-sm text-gray-600">
+            <li>
+                <a href="{{ url_for('risk_dashboard') }}" class="hover:text-blue-600 transition-colors">
+                    <i class="fas fa-shield-alt ml-2"></i>
+                    لوحة المخاطر
+                </a>
+            </li>
+            <li>
+                <i class="fas fa-chevron-left"></i>
+            </li>
+            <li>
+                <a href="{{ url_for('risk_register') }}" class="hover:text-blue-600 transition-colors">
+                    سجل المخاطر
+                </a>
+            </li>
+            <li>
+                <i class="fas fa-chevron-left"></i>
+            </li>
+            <li class="text-blue-600 font-medium">
+                {{ risk.title[:30] }}{% if risk.title|length > 30 %}...{% endif %}
+            </li>
+        </ol>
+    </nav>
+    
+    <!-- Risk Header -->
+    <div class="bg-white rounded-xl shadow mb-6">
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div class="flex-1">
+                    <div class="flex items-start justify-between mb-4">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-800 mb-2">{{ risk.title }}</h1>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="status-badge status-{{ risk.status }}">
+                                    {% if risk.status == 'open' %}مفتوحة
+                                    {% elif risk.status == 'in_progress' %}قيد المعالجة
+                                    {% elif risk.status == 'mitigated' %}تمت المعالجة
+                                    {% else %}مغلقة{% endif %}
+                                </span>
+                                
+                                <span class="priority-badge priority-{{ risk.priority }}">
+                                    {% if risk.priority == 'critical' %}حرجة
+                                    {% elif risk.priority == 'high' %}عالية
+                                    {% elif risk.priority == 'medium' %}متوسطة
+                                    {% else %}منخفضة{% endif %}
+                                </span>
+                                
+                                <span class="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm font-medium">
+                                    {{ risk.category.name }}
+                                </span>
+                                
+                                <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                                    {{ risk.branch.name }}
+                                </span>
+                                
+                                {% if risk.basel_category %}
+                                <span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
+                                    {{ risk.basel_category|replace('_', ' ')|title }}
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Risk Score Gauge -->
+                        <div class="risk-score-gauge">
+                            <div class="gauge-background bg-gray-200"></div>
+                            <div class="gauge-fill 
+                                {% if risk.risk_score >= 20 %}bg-red-500
+                                {% elif risk.risk_score >= 10 %}bg-orange-500
+                                {% elif risk.risk_score >= 5 %}bg-yellow-500
+                                {% else %}bg-green-500{% endif %}"
+                                style="transform: rotate({{ (risk.risk_score / 25 * 180) - 90 }}deg);">
+                            </div>
+                            <div class="gauge-cover"></div>
+                            <div class="gauge-value 
+                                {% if risk.risk_score >= 20 %}text-red-600
+                                {% elif risk.risk_score >= 10 %}text-orange-600
+                                {% elif risk.risk_score >= 5 %}text-yellow-600
+                                {% else %}text-green-600{% endif %}">
+                                {{ risk.risk_score }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <p class="text-gray-700 mb-6">{{ risk.description }}</p>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-600 mb-1">تاريخ التعريف</p>
+                            <p class="font-medium">{{ risk.identified_date.strftime('%Y-%m-%d') }}</p>
+                        </div>
+                        
+                        <div>
+                            <p class="text-sm text-gray-600 mb-1">تاريخ الحل المستهدف</p>
+                            <p class="font-medium {% if risk.target_resolution_date and risk.target_resolution_date < now() and risk.status == 'open' %}text-red-600{% endif %}">
+                                {% if risk.target_resolution_date %}
+                                    {{ risk.target_resolution_date.strftime('%Y-%m-%d') }}
+                                    {% if risk.target_resolution_date < now() and risk.status == 'open' %} (متأخر){% endif %}
+                                {% else %}
+                                    غير محدد
+                                {% endif %}
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <p class="text-sm text-gray-600 mb-1">مالك الخطر</p>
+                            <p class="font-medium">
+                                {% if risk.owner %}
+                                    {{ risk.owner.username }}
+                                {% else %}
+                                    غير معين
+                                {% endif %}
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <p class="text-sm text-gray-600 mb-1">مسؤول المتابعة</p>
+                            <p class="font-medium">
+                                {% if risk.assigned_to %}
+                                    {{ risk.assigned_to.username }}
+                                {% else %}
+                                    غير معين
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Risk Tabs -->
+        <div class="border-b border-gray-200">
+            <nav class="flex overflow-x-auto">
+                <button id="tab-overview" 
+                        class="tab-button active px-6 py-4 text-gray-600 hover:text-blue-600 whitespace-nowrap"
+                        onclick="switchTab('overview')">
+                    <i class="fas fa-info-circle ml-2"></i>
+                    نظرة عامة
+                </button>
+                
+                <button id="tab-actions" 
+                        class="tab-button px-6 py-4 text-gray-600 hover:text-blue-600 whitespace-nowrap"
+                        onclick="switchTab('actions')">
+                    <i class="fas fa-tasks ml-2"></i>
+                    الإجراءات
+                    <span class="bg-blue-100 text-blue-800 text-xs rounded-full px-2 py-1 mr-2">
+                        {{ actions|length }}
+                    </span>
+                </button>
+                
+                <button id="tab-controls" 
+                        class="tab-button px-6 py-4 text-gray-600 hover:text-blue-600 whitespace-nowrap"
+                        onclick="switchTab('controls')">
+                    <i class="fas fa-shield-alt ml-2"></i>
+                    الضوابط
+                    <span class="bg-green-100 text-green-800 text-xs rounded-full px-2 py-1 mr-2">
+                        {{ controls|length }}
+                    </span>
+                </button>
+                
+                <button id="tab-assessments" 
+                        class="tab-button px-6 py-4 text-gray-600 hover:text-blue-600 whitespace-nowrap"
+                        onclick="switchTab('assessments')">
+                    <i class="fas fa-chart-line ml-2"></i>
+                    التقييمات
+                    <span class="bg-purple-100 text-purple-800 text-xs rounded-full px-2 py-1 mr-2">
+                        {{ assessments|length }}
+                    </span>
+                </button>
+                
+                <button id="tab-timeline" 
+                        class="tab-button px-6 py-4 text-gray-600 hover:text-blue-600 whitespace-nowrap"
+                        onclick="switchTab('timeline')">
+                    <i class="fas fa-history ml-2"></i>
+                    الخط الزمني
+                </button>
+            </nav>
+        </div>
+        
+        <!-- Tab Content -->
+        <div class="p-6">
+            <!-- Overview Tab -->
+            <div id="content-overview" class="tab-content">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Left Column: Risk Assessment & Matrix -->
+                    <div class="lg:col-span-2">
+                        <!-- Risk Assessment -->
+                        <div class="risk-detail-card rounded-xl border border-gray-200 p-6 mb-6">
+                            <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                                <i class="fas fa-chart-bar text-blue-600 ml-3"></i>
+                                تقييم المخاطرة
+                            </h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div>
+                                    <h4 class="font-medium text-gray-700 mb-3">مستوى التأثير</h4>
+                                    <div class="space-y-2">
+                                        {% for i in range(1, 6) %}
+                                        <div class="flex items-center">
+                                            <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center ml-3 
+                                                {% if i == risk.impact %}border-blue-500 bg-blue-50{% else %}border-gray-300{% endif %}">
+                                                {{ i }}
+                                            </div>
+                                            <span class="text-gray-700 {% if i == risk.impact %}font-medium{% endif %}">
+                                                {{ ['ضعيف', 'محدود', 'متوسط', 'كبير', 'كارثي'][i-1] }}
+                                            </span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    
+                                    <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+                                        <p class="text-sm text-gray-600">
+                                            <span class="font-medium">تفسير التأثير:</span>
+                                            {% if risk.impact == 1 %}تأثير محدود على العمليات
+                                            {% elif risk.impact == 2 %}تأثير على جزء من العمليات
+                                            {% elif risk.impact == 3 %}تأثير على معظم العمليات
+                                            {% elif risk.impact == 4 %}تأثير كبير على العمليات الأساسية
+                                            {% else %}تأثير كارثي على استمرارية العمل{% endif %}
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <h4 class="font-medium text-gray-700 mb-3">احتمالية الحدوث</h4>
+                                    <div class="space-y-2">
+                                        {% for i in range(1, 6) %}
+                                        <div class="flex items-center">
+                                            <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center ml-3 
+                                                {% if i == risk.likelihood %}border-blue-500 bg-blue-50{% else %}border-gray-300{% endif %}">
+                                                {{ i }}
+                                            </div>
+                                            <span class="text-gray-700 {% if i == risk.likelihood %}font-medium{% endif %}">
+                                                {{ ['نادر', 'منخفض', 'متوسط', 'مرتفع', 'كارثي'][i-1] }}
+                                            </span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    
+                                    <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+                                        <p class="text-sm text-gray-600">
+                                            <span class="font-medium">تفسير الاحتمالية:</span>
+                                            {% if risk.likelihood == 1 %}حدث نادر (أقل من مرة في السنة)
+                                            {% elif risk.likelihood == 2 %}حدث منخفض (مرة في السنة)
+                                            {% elif risk.likelihood == 3 %}حدث متوسط (عدة مرات في السنة)
+                                            {% elif risk.likelihood == 4 %}حدث مرتفع (مرة في الشهر)
+                                            {% else %}حدث كارثي (أسبوعي أو يومي){% endif %}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Risk Matrix Position -->
+                            <div>
+                                <h4 class="font-medium text-gray-700 mb-3">موقع الخطر في المصفوفة</h4>
+                                <div class="border border-gray-200 rounded-lg overflow-hidden">
+                                    <div class="grid grid-cols-6 bg-gray-50 border-b">
+                                        <div class="p-3 border-l border-gray-200"></div>
+                                        {% for i in range(1, 6) %}
+                                        <div class="p-3 border-l border-gray-200 text-center font-bold">تأثير {{ i }}</div>
+                                        {% endfor %}
+                                    </div>
+                                    
+                                    {% for likelihood in range(5, 0, -1) %}
+                                    <div class="grid grid-cols-6 {% if likelihood > 1 %}border-b{% endif %}">
+                                        <div class="p-3 border-l border-gray-200 bg-gray-50 font-bold text-center">
+                                            احتمال {{ likelihood }}
+                                        </div>
+                                        
+                                        {% for impact in range(1, 6) %}
+                                        {% set score = impact * likelihood %}
+                                        {% set level = 'low' if score <= 4 else 'medium' if score <= 9 else 'high' if score <= 19 else 'critical' %}
+                                        {% set is_current = impact == risk.impact and likelihood == risk.likelihood %}
+                                        
+                                        <div class="matrix-cell {{ 'risk-' + level }} border-l border-gray-200 {% if is_current %}matrix-current{% endif %}"
+                                             title="درجة {{ score }}">
+                                            {% if is_current %}
+                                            <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center">
+                                                <i class="fas fa-bullseye text-blue-600"></i>
+                                            </div>
+                                            {% else %}
+                                            <span>{{ score }}</span>
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Financial Impact -->
+                        {% if risk.potential_loss or risk.mitigation_cost or risk.capital_requirement %}
+                        <div class="financial-impact rounded-xl border border-gray-200 p-6 mb-6">
+                            <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                                <i class="fas fa-money-bill-wave text-green-600 ml-3"></i>
+                                الأثر المالي
+                            </h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {% if risk.potential_loss %}
+                                <div class="bg-white p-4 rounded-lg border">
+                                    <p class="text-sm text-gray-600 mb-1">الخسارة المحتملة</p>
+                                    <p class="text-2xl font-bold text-red-600">
+                                        {{ "%.2f"|format(risk.potential_loss) }} ر.س
+                                    </p>
+                                    <p class="text-xs text-gray-500 mt-1">في حال تحقق الخطر</p>
+                                </div>
+                                {% endif %}
+                                
+                                {% if risk.mitigation_cost %}
+                                <div class="bg-white p-4 rounded-lg border">
+                                    <p class="text-sm text-gray-600 mb-1">تكلفة المعالجة</p>
+                                    <p class="text-2xl font-bold text-yellow-600">
+                                        {{ "%.2f"|format(risk.mitigation_cost) }} ر.س
+                                    </p>
+                                    <p class="text-xs text-gray-500 mt-1">لتنفيذ إجراءات المعالجة</p>
+                                </div>
+                                {% endif %}
+                                
+                                {% if risk.capital_requirement %}
+                                <div class="basel-compliance p-4 rounded-lg border">
+                                    <p class="text-sm text-gray-600 mb-1">متطلبات رأس المال (Basel III)</p>
+                                    <p class="text-2xl font-bold text-purple-600">
+                                        {{ "%.2f"|format(risk.capital_requirement) }} ر.س
+                                    </p>
+                                    <p class="text-xs text-gray-500 mt-1">للتغطية التنظيمية</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Right Column: Quick Info & Actions -->
+                    <div class="space-y-6">
+                        <!-- Risk Owners -->
+                        <div class="risk-detail-card rounded-xl border border-gray-200 p-6">
+                            <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                                <i class="fas fa-user-tie text-red-600 ml-3"></i>
+                                المسؤولية
+                            </h3>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <p class="text-sm text-gray-600 mb-1">مالك الخطر</p>
+                                    <div class="flex items-center">
+                                        <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center ml-3">
+                                            <i class="fas fa-user text-red-600"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium">
+                                                {% if risk.owner %}
+                                                    {{ risk.owner.username }}
+                                                {% else %}
+                                                    غير معين
+                                                {% endif %}
+                                            </p>
+                                            <p class="text-sm text-gray-600">مسؤول عن متابعة الخطر</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <p class="text-sm text-gray-600 mb-1">مسؤول المتابعة</p>
+                                    <div class="flex items-center">
+                                        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center ml-3">
+                                            <i class="fas fa-user-check text-blue-600"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium">
+                                                {% if risk.assigned_to %}
+                                                    {{ risk.assigned_to.username }}
+                                                {% else %}
+                                                    غير معين
+                                                {% endif %}
+                                            </p>
+                                            <p class="text-sm text-gray-600">مسؤول عن تنفيذ الإجراءات</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <p class="text-sm text-gray-600 mb-1">منشئ السجل</p>
+                                    <div class="flex items-center">
+                                        <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center ml-3">
+                                            <i class="fas fa-user-plus text-green-600"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium">{{ risk.created_by.username if risk.created_by else 'غير معروف' }}</p>
+                                            <p class="text-sm text-gray-600">{{ risk.identified_date.strftime('%Y-%m-%d') }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Quick Actions -->
+                        <div class="risk-detail-card rounded-xl border border-gray-200 p-6">
+                            <h3 class="text-lg font-bold text-gray-800 mb-4">إجراءات سريعة</h3>
+                            
+                            <div class="space-y-3">
+                                {% if user_role in ['admin', 'risk_manager', 'branch_manager'] %}
+                                <button onclick="showAddActionModal()"
+                                        class="w-full p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center justify-center">
+                                    <i class="fas fa-plus-circle ml-2"></i>
+                                    إضافة إجراء جديد
+                                </button>
+                                
+                                <button onclick="showAddControlModal()"
+                                        class="w-full p-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center justify-center">
+                                    <i class="fas fa-shield-alt ml-2"></i>
+                                    إضافة ضابط جديد
+                                </button>
+                                
+                                <button onclick="showAssessmentModal()"
+                                        class="w-full p-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center justify-center">
+                                    <i class="fas fa-chart-line ml-2"></i>
+                                    إجراء تقييم جديد
+                                </button>
+                                {% endif %}
+                                
+                                <button onclick="updateRiskStatus()"
+                                        class="w-full p-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition flex items-center justify-center">
+                                    <i class="fas fa-edit ml-2"></i>
+                                    تحديث حالة الخطر
+                                </button>
+                                
+                                <button onclick="generateRiskReport()"
+                                        class="w-full p-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition flex items-center justify-center">
+                                    <i class="fas fa-file-pdf ml-2"></i>
+                                    تقرير الخطر
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Basel III Compliance -->
+                        {% if risk.basel_category %}
+                        <div class="basel-compliance rounded-xl border border-blue-200 p-6">
+                            <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                                <i class="fas fa-shield-check text-blue-600 ml-3"></i>
+                                توافق Basel III
+                            </h3>
+                            
+                            <div class="space-y-3">
+                                <div>
+                                    <p class="text-sm text-gray-600 mb-1">تصنيف Basel</p>
+                                    <p class="font-medium">{{ risk.basel_category|replace('_', ' ')|title }}</p>
+                                </div>
+                                
+                                {% if risk.capital_requirement %}
+                                <div>
+                                    <p class="text-sm text-gray-600 mb-1">متطلبات رأس المال</p>
+                                    <p class="font-bold text-purple-600">{{ "%.2f"|format(risk.capital_requirement) }} ر.س</p>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="pt-3 border-t">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-600">مستوى الأهمية:</span>
+                                        <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
+                                            {% if risk.basel_category in ['credit_risk', 'market_risk'] %}
+                                            عالي الأهمية
+                                            {% else %}
+                                            متوسط الأهمية
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Actions Tab -->
+            <div id="content-actions" class="tab-content hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-bold text-gray-800">إجراءات معالجة المخاطرة</h3>
+                    
+                    {% if user_role in ['admin', 'risk_manager', 'branch_manager'] %}
+                    <button onclick="showAddActionModal()"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                        <i class="fas fa-plus ml-2"></i>
+                        إضافة إجراء جديد
+                    </button>
+                    {% endif %}
+                </div>
+                
+                {% if actions %}
+                <div class="space-y-4">
+                    {% for action in actions %}
+                    <div class="action-card action-{{ action.status }} bg-white border border-gray-200 rounded-lg p-5">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="flex-1">
+                                <div class="flex items-center mb-3">
+                                    <h4 class="font-bold text-lg text-gray-800">{{ action.title }}</h4>
+                                    <span class="px-3 py-1 rounded-full text-sm font-medium mr-3 
+                                        {% if action.status == 'completed' %}bg-green-100 text-green-800
+                                        {% elif action.status == 'in_progress' %}bg-blue-100 text-blue-800
+                                        {% elif action.status == 'cancelled' %}bg-gray-100 text-gray-800
+                                        {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                        {% if action.status == 'completed' %}مكتمل
+                                        {% elif action.status == 'in_progress' %}قيد التنفيذ
+                                        {% elif action.status == 'cancelled' %}ملغي
+                                        {% else %}معلق{% endif %}
+                                    </span>
+                                    
+                                    <span class="px-3 py-1 rounded-full text-sm font-medium mr-3 
+                                        {% if action.priority == 'high' %}bg-red-100 text-red-800
+                                        {% elif action.priority == 'medium' %}bg-yellow-100 text-yellow-800
+                                        {% else %}bg-green-100 text-green-800{% endif %}">
+                                        {% if action.priority == 'high' %}عالي
+                                        {% elif action.priority == 'medium' %}متوسط
+                                        {% else %}منخفض{% endif %}
+                                    </span>
+                                </div>
+                                
+                                <p class="text-gray-700 mb-4">{{ action.description }}</p>
+                                
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                    <div>
+                                        <p class="text-sm text-gray-600 mb-1">تاريخ البدء</p>
+                                        <p class="font-medium">
+                                            {% if action.start_date %}
+                                                {{ action.start_date.strftime('%Y-%m-%d') }}
+                                            {% else %}
+                                                غير محدد
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                    
+                                    <div>
+                                        <p class="text-sm text-gray-600 mb-1">تاريخ الاستحقاق</p>
+                                        <p class="font-medium {% if action.due_date and action.due_date < now() and action.status != 'completed' %}text-red-600{% endif %}">
+                                            {% if action.due_date %}
+                                                {{ action.due_date.strftime('%Y-%m-%d') }}
+                                                {% if action.due_date < now() and action.status != 'completed' %} (متأخر){% endif %}
+                                            {% else %}
+                                                غير محدد
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                    
+                                    <div>
+                                        <p class="text-sm text-gray-600 mb-1">المسؤول</p>
+                                        <p class="font-medium">
+                                            {% if action.assigned_to %}
+                                                {{ action.assigned_to.username }}
+                                            {% else %}
+                                                غير معين
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                    
+                                    <div>
+                                        <p class="text-sm text-gray-600 mb-1">نوع الإجراء</p>
+                                        <p class="font-medium">
+                                            {% if action.action_type == 'mitigation' %}تخفيف
+                                            {% elif action.action_type == 'transfer' %}تحويل
+                                            {% elif action.action_type == 'avoid' %}تجنب
+                                            {% else %}قبول{% endif %}
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Progress -->
+                                <div>
+                                    <div class="flex justify-between text-sm mb-1">
+                                        <span class="text-gray-600">معدل الإنجاز</span>
+                                        <span class="font-bold">{{ action.progress_percentage }}%</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill 
+                                            {% if action.progress_percentage >= 80 %}bg-green-500
+                                            {% elif action.progress_percentage >= 50 %}bg-yellow-500
+                                            {% else %}bg-red-500{% endif %}"
+                                            style="width: {{ action.progress_percentage }}%">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex space-x-2 space-x-reverse mr-4">
+                                <button onclick="updateActionProgress({{ action.id }})"
+                                        class="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-lg">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="viewActionDetails({{ action.id }})"
+                                        class="text-green-600 hover:text-green-800 p-2 hover:bg-green-50 rounded-lg">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {% if action.notes %}
+                        <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+                            <p class="text-sm text-gray-700">{{ action.notes }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-12">
+                    <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-tasks text-gray-400 text-2xl"></i>
+                    </div>
+                    <h4 class="text-lg font-bold text-gray-600 mb-2">لا توجد إجراءات</h4>
+                    <p class="text-gray-500 mb-6">لم يتم إضافة أي إجراءات معالجة لهذه المخاطرة</p>
+                    
+                    {% if user_role in ['admin', 'risk_manager', 'branch_manager'] %}
+                    <button onclick="showAddActionModal()"
+                            class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center mx-auto">
+                        <i class="fas fa-plus ml-2"></i>
+                        إضافة أول إجراء
+                    </button>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Controls Tab -->
+            <div id="content-controls" class="tab-content hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-bold text-gray-800">ضوابط المخاطرة</h3>
+                    
+                    {% if user_role in ['admin', 'risk_manager', 'branch_manager'] %}
+                    <button onclick="showAddControlModal()"
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center">
+                        <i class="fas fa-plus ml-2"></i>
+                        إضافة ضابط جديد
+                    </button>
+                    {% endif %}
+                </div>
+                
+                {% if controls %}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {% for control in controls %}
+                    <div class="control-card control-{{ control.control_type }} bg-white border border-gray-200 rounded-lg p-5">
+                        <div class="mb-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-bold text-lg text-gray-800">{{ control.name }}</h4>
+                                <span class="px-3 py-1 rounded-full text-sm font-medium 
+                                    {% if control.implementation_status == 'operational' %}bg-green-100 text-green-800
+                                    {% elif control.implementation_status == 'implemented' %}bg-blue-100 text-blue-800
+                                    {% elif control.implementation_status == 'testing' %}bg-yellow-100 text-yellow-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {% if control.implementation_status == 'operational' %}تشغيلي
+                                    {% elif control.implementation_status == 'implemented' %}منفذ
+                                    {% elif control.implementation_status == 'testing' %}قيد الاختبار
+                                    {% else %}معلق{% endif %}
+                                </span>
+                            </div>
+                            
+                            <p class="text-gray-700 mb-4">{{ control.description }}</p>
+                            
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <p class="text-sm text-gray-600 mb-1">نوع الضابط</p>
+                                    <p class="font-medium">
+                                        {% if control.control_type == 'preventive' %}وقائي
+                                        {% elif control.control_type == 'detective' %}كشف
+                                        {% else %}علاجي{% endif %}
+                                    </p>
+                                </div>
+                                
+                                <div>
+                                    <p class="text-sm text-gray-600 mb-1">فعالية الضابط</p>
+                                    <div class="flex items-center">
+                                        {% for i in range(1, 6) %}
+                                        <i class="fas fa-star ml-1 
+                                            {% if i <= control.effectiveness %}text-yellow-500
+                                            {% else %}text-gray-300{% endif %}"></i>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span class="text-gray-600">آخر مراجعة</span>
+                                    <span class="font-medium">
+                                        {% if control.last_review_date %}
+                                            {{ control.last_review_date.strftime('%Y-%m-%d') }}
+                                        {% else %}
+                                            لم تتم المراجعة
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">المراجعة القادمة</span>
+                                    <span class="font-medium {% if control.next_review_date and control.next_review_date < now() %}text-red-600{% endif %}">
+                                        {% if control.next_review_date %}
+                                            {{ control.next_review_date.strftime('%Y-%m-%d') }}
+                                        {% else %}
+                                            غير مجدول
+                                        {% endif %}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center border-t pt-4">
+                            <div class="text-sm text-gray-600">
+                                <i class="fas fa-sync-alt ml-2"></i>
+                                {{ control.review_frequency }}
+                            </div>
+                            
+                            <div class="flex space-x-2 space-x-reverse">
+                                {% if user_role in ['admin', 'risk_manager'] %}
+                                <button onclick="reviewControl({{ control.id }})"
+                                        class="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                    مراجعة
+                                </button>
+                                {% endif %}
+                                
+                                <button onclick="viewControlDetails({{ control.id }})"
+                                        class="px-3 py-1 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700">
+                                    تفاصيل
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-12">
+                    <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-shield-alt text-gray-400 text-2xl"></i>
+                    </div>
+                    <h4 class="text-lg font-bold text-gray-600 mb-2">لا توجد ضوابط</h4>
+                    <p class="text-gray-500 mb-6">لم يتم إضافة أي ضوابط لهذه المخاطرة</p>
+                    
+                    {% if user_role in ['admin', 'risk_manager', 'branch_manager'] %}
+                    <button onclick="showAddControlModal()"
+                            class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center mx-auto">
+                        <i class="fas fa-plus ml-2"></i>
+                        إضافة أول ضابط
+                    </button>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Assessments Tab -->
+            <div id="content-assessments" class="tab-content hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-bold text-gray-800">تقييمات المخاطرة</h3>
+                    
+                    {% if user_role in ['admin', 'risk_manager', 'branch_manager'] %}
+                    <button onclick="showAssessmentModal()"
+                            class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center">
+                        <i class="fas fa-plus ml-2"></i>
+                        إجراء تقييم جديد
+                    </button>
+                    {% endif %}
+                </div>
+                
+                {% if assessments %}
+                <div class="space-y-6">
+                    {% for assessment in assessments %}
+                    <div class="bg-white border border-gray-200 rounded-lg p-6">
+                        <div class="flex justify-between items-start mb-6">
+                            <div>
+                                <h4 class="font-bold text-lg text-gray-800 mb-2">
+                                    التقييم بتاريخ {{ assessment.assessment_date.strftime('%Y-%m-%d') }}
+                                </h4>
+                                <p class="text-gray-600">
+                                    أجراه: {{ assessment.assessed_by.username if assessment.assessed_by else 'غير معروف' }}
+                                </p>
+                            </div>
+                            
+                            <div class="text-right">
+                                <div class="text-2xl font-bold 
+                                    {% if assessment.residual_risk_score >= 20 %}text-red-600
+                                    {% elif assessment.residual_risk_score >= 10 %}text-orange-600
+                                    {% elif assessment.residual_risk_score >= 5 %}text-yellow-600
+                                    {% else %}text-green-600{% endif %}">
+                                    {{ assessment.residual_risk_score }}
+                                </div>
+                                <p class="text-sm text-gray-600">المخاطرة المتبقية</p>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div>
+                                <h5 class="font-medium text-gray-700 mb-3">درجات التقييم</h5>
+                                <div class="space-y-4">
+                                    <div>
+                                        <div class="flex justify-between mb-1">
+                                            <span class="text-gray-600">التأثير</span>
+                                            <span class="font-bold">{{ assessment.impact_score }}/5</span>
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill bg-red-500" 
+                                                 style="width: {{ (assessment.impact_score / 5 * 100) }}%">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <div class="flex justify-between mb-1">
+                                            <span class="text-gray-600">الاحتمالية</span>
+                                            <span class="font-bold">{{ assessment.likelihood_score }}/5</span>
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill bg-yellow-500" 
+                                                 style="width: {{ (assessment.likelihood_score / 5 * 100) }}%">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <div class="flex justify-between mb-1">
+                                            <span class="text-gray-600">المخاطرة المتبقية</span>
+                                            <span class="font-bold">{{ assessment.residual_risk_score }}/25</span>
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill 
+                                                {% if assessment.residual_risk_score >= 20 %}bg-red-500
+                                                {% elif assessment.residual_risk_score >= 10 %}bg-orange-500
+                                                {% elif assessment.residual_risk_score >= 5 %}bg-yellow-500
+                                                {% else %}bg-green-500{% endif %}" 
+                                                 style="width: {{ (assessment.residual_risk_score / 25 * 100) }}%">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h5 class="font-medium text-gray-700 mb-3">التغيير عن التقييم السابق</h5>
+                                <div class="space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-gray-600">تغيير التأثير</span>
+                                        <span class="font-bold {% if assessment.impact_change > 0 %}text-red-600{% elif assessment.impact_change < 0 %}text-green-600{% else %}text-gray-600{% endif %}">
+                                            {% if assessment.impact_change > 0 %}+{% endif %}{{ assessment.impact_change }}
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-gray-600">تغيير الاحتمالية</span>
+                                        <span class="font-bold {% if assessment.likelihood_change > 0 %}text-red-600{% elif assessment.likelihood_change < 0 %}text-green-600{% else %}text-gray-600{% endif %}">
+                                            {% if assessment.likelihood_change > 0 %}+{% endif %}{{ assessment.likelihood_change }}
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="pt-3 border-t">
+                                        <p class="text-sm text-gray-600 mb-1">التوجه العام</p>
+                                        <p class="font-medium 
+                                            {% if assessment.impact_change > 0 or assessment.likelihood_change > 0 %}text-red-600
+                                            {% elif assessment.impact_change < 0 or assessment.likelihood_change < 0 %}text-green-600
+                                            {% else %}text-gray-600{% endif %}">
+                                            {% if assessment.impact_change > 0 or assessment.likelihood_change > 0 %}
+                                            اتجاه تصاعدي للمخاطرة
+                                            {% elif assessment.impact_change < 0 or assessment.likelihood_change < 0 %}
+                                            اتجاه تنازلي للمخاطرة
+                                            {% else %}
+                                            مستقر
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {% if assessment.comments or assessment.recommendations %}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {% if assessment.comments %}
+                            <div>
+                                <h5 class="font-medium text-gray-700 mb-2">التعليقات</h5>
+                                <div class="comment-bubble">
+                                    <p class="text-gray-700">{{ assessment.comments }}</p>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if assessment.recommendations %}
+                            <div>
+                                <h5 class="font-medium text-gray-700 mb-2">التوصيات</h5>
+                                <div class="bg-green-50 p-4 rounded-lg">
+                                    <p class="text-gray-700">{{ assessment.recommendations }}</p>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-12">
+                    <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-chart-line text-gray-400 text-2xl"></i>
+                    </div>
+                    <h4 class="text-lg font-bold text-gray-600 mb-2">لا توجد تقييمات</h4>
+                    <p class="text-gray-500 mb-6">لم يتم إجراء أي تقييمات لهذه المخاطرة</p>
+                    
+                    {% if user_role in ['admin', 'risk_manager', 'branch_manager'] %}
+                    <button onclick="showAssessmentModal()"
+                            class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center mx-auto">
+                        <i class="fas fa-plus ml-2"></i>
+                        إجراء أول تقييم
+                    </button>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Timeline Tab -->
+            <div id="content-timeline" class="tab-content hidden">
+                <h3 class="text-lg font-bold text-gray-800 mb-6">الخط الزمني للنشاطات</h3>
+                
+                <div class="timeline">
+                    <!-- Risk Creation -->
+                    <div class="timeline-item">
+                        <div class="timeline-dot bg-green-500"></div>
+                        <div class="bg-white border border-gray-200 rounded-lg p-4">
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <h4 class="font-bold text-gray-800">إنشاء سجل المخاطرة</h4>
+                                    <p class="text-sm text-gray-600">تم إنشاء سجل المخاطرة في النظام</p>
+                                </div>
+                                <span class="text-sm text-gray-500">{{ risk.identified_date.strftime('%Y-%m-%d %H:%M') }}</span>
+                            </div>
+                            <div class="text-sm text-gray-700">
+                                <p>تم إنشاء السجل بواسطة: {{ risk.created_by.username if risk.created_by else 'غير معروف' }}</p>
+                                <p>درجة المخاطرة الأولية: {{ risk.risk_score }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Risk Assessments -->
+                    {% for assessment in assessments %}
+                    <div class="timeline-item">
+                        <div class="timeline-dot bg-purple-500"></div>
+                        <div class="bg-white border border-gray-200 rounded-lg p-4">
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <h4 class="font-bold text-gray-800">تقييم المخاطرة</h4>
+                                    <p class="text-sm text-gray-600">تم إجراء تقييم جديد للمخاطرة</p>
+                                </div>
+                                <span class="text-sm text-gray-500">{{ assessment.assessment_date.strftime('%Y-%m-%d %H:%M') }}</span>
+                            </div>
+                            <div class="text-sm text-gray-700">
+                                <p>أجراه: {{ assessment.assessed_by.username if assessment.assessed_by else 'غير معروف' }}</p>
+                                <p>درجة المخاطرة المتبقية: {{ assessment.residual_risk_score }}</p>
+                                {% if assessment.comments %}
+                                <p class="mt-2 p-2 bg-gray-50 rounded">"{{ assessment.comments[:100] }}{% if assessment.comments|length > 100 %}...{% endif %}"</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    
+                    <!-- Risk Actions -->
+                    {% for action in actions %}
+                    {% if action.status == 'completed' and action.completion_date %}
+                    <div class="timeline-item">
+                        <div class="timeline-dot bg-blue-500"></div>
+                        <div class="bg-white border border-gray-200 rounded-lg p-4">
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <h4 class="font-bold text-gray-800">إكمال الإجراء: {{ action.title }}</h4>
+                                    <p class="text-sm text-gray-600">تم إكمال إجراء معالجة المخاطرة</p>
+                                </div>
+                                <span class="text-sm text-gray-500">{{ action.completion_date.strftime('%Y-%m-%d %H:%M') }}</span>
+                            </div>
+                            <div class="text-sm text-gray-700">
+                                <p>مسؤول التنفيذ: {{ action.assigned_to.username if action.assigned_to else 'غير معين' }}</p>
+                                <p>نوع الإجراء: 
+                                    {% if action.action_type == 'mitigation' %}تخفيف
+                                    {% elif action.action_type == 'transfer' %}تحويل
+                                    {% elif action.action_type == 'avoid' %}تجنب
+                                    {% else %}قبول{% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    
+                    <!-- Risk Controls -->
+                    {% for control in controls %}
+                    {% if control.implemented_date %}
+                    <div class="timeline-item">
+                        <div class="timeline-dot bg-green-500"></div>
+                        <div class="bg-white border border-gray-200 rounded-lg p-4">
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <h4 class="font-bold text-gray-800">تنفيذ الضابط: {{ control.name }}</h4>
+                                    <p class="text-sm text-gray-600">تم تنفيذ ضابط جديد للمخاطرة</p>
+                                </div>
+                                <span class="text-sm text-gray-500">{{ control.implemented_date.strftime('%Y-%m-%d %H:%M') }}</span>
+                            </div>
+                            <div class="text-sm text-gray-700">
+                                <p>نوع الضابط: 
+                                    {% if control.control_type == 'preventive' %}وقائي
+                                    {% elif control.control_type == 'detective' %}كشف
+                                    {% else %}علاجي{% endif %}
+                                </p>
+                                <p>الفعالية: {{ control.effectiveness }}/5</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    
+                    <!-- Status Changes -->
+                    {% if risk.status == 'mitigated' and risk.actual_resolution_date %}
+                    <div class="timeline-item">
+                        <div class="timeline-dot bg-yellow-500"></div>
+                        <div class="bg-white border border-gray-200 rounded-lg p-4">
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <h4 class="font-bold text-gray-800">معالجة المخاطرة</h4>
+                                    <p class="text-sm text-gray-600">تمت معالجة المخاطرة بنجاح</p>
+                                </div>
+                                <span class="text-sm text-gray-500">{{ risk.actual_resolution_date.strftime('%Y-%m-%d %H:%M') }}</span>
+                            </div>
+                            <div class="text-sm text-gray-700">
+                                <p>تم تغيير حالة المخاطرة من "مفتوحة" إلى "تمت المعالجة"</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if risk.status == 'closed' and risk.updated_at %}
+                    <div class="timeline-item">
+                        <div class="timeline-dot bg-gray-500"></div>
+                        <div class="bg-white border border-gray-200 rounded-lg p-4">
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <h4 class="font-bold text-gray-800">إغلاق المخاطرة</h4>
+                                    <p class="text-sm text-gray-600">تم إغلاق سجل المخاطرة</p>
+                                </div>
+                                <span class="text-sm text-gray-500">{{ risk.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                            </div>
+                            <div class="text-sm text-gray-700">
+                                <p>تم إنهاء متابعة المخاطرة</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Action Modal -->
+<div id="add-action-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl animate__animated animate__zoomIn max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800">إضافة إجراء جديد</h3>
+                <button onclick="closeAddActionModal()" 
+                        class="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <form id="add-action-form">
+                <input type="hidden" name="risk_id" value="{{ risk.id }}">
+                
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">عنوان الإجراء</label>
+                        <input type="text" 
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                               name="title" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">وصف الإجراء</label>
+                        <textarea class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                  name="description" rows="3" required></textarea>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">نوع الإجراء</label>
+                            <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                    name="action_type" required>
+                                <option value="mitigation">تخفيف (Mitigation)</option>
+                                <option value="transfer">تحويل (Transfer)</option>
+                                <option value="avoid">تجنب (Avoid)</option>
+                                <option value="accept">قبول (Accept)</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">الأولوية</label>
+                            <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                    name="priority" required>
+                                <option value="low">منخفضة</option>
+                                <option value="medium" selected>متوسطة</option>
+                                <option value="high">عالية</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">تاريخ البدء</label>
+                            <input type="date" 
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                   name="start_date">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">تاريخ الاستحقاق</label>
+                            <input type="date" 
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                   name="due_date" required>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">تعيين إلى</label>
+                        <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                name="assigned_to_id">
+                            <option value="">اختر مسؤول التنفيذ</option>
+                            {% for user in users %}
+                            <option value="{{ user.id }}">{{ user.username }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">ملاحظات إضافية</label>
+                        <textarea class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                  name="notes" rows="2"></textarea>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 space-x-reverse mt-6">
+                    <button type="button" onclick="closeAddActionModal()"
+                            class="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                        إلغاء
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center">
+                        <span>إضافة الإجراء</span>
+                        <i class="fas fa-save ml-2"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Assessment Modal -->
+<div id="assessment-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl animate__animated animate__zoomIn max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800">إجراء تقييم جديد</h3>
+                <button onclick="closeAssessmentModal()" 
+                        class="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <form id="assessment-form">
+                <input type="hidden" name="risk_id" value="{{ risk.id }}">
+                
+                <div class="space-y-6">
+                    <div class="bg-blue-50 p-4 rounded-lg mb-4">
+                        <div class="flex items-center">
+                            <i class="fas fa-info-circle text-blue-600 ml-3"></i>
+                            <div>
+                                <p class="text-blue-800 font-medium">التقييم الحالي</p>
+                                <p class="text-sm text-blue-600">
+                                    التأثير: {{ risk.impact }}/5 • الاحتمالية: {{ risk.likelihood }}/5 • درجة المخاطرة: {{ risk.risk_score }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-gray-700 mb-3 font-medium">التأثير الجديد</label>
+                            <div class="space-y-2">
+                                {% for i in range(1, 6) %}
+                                <div class="flex items-center">
+                                    <input type="radio" id="new-impact-{{ i }}" name="impact_score" value="{{ i }}" class="ml-2" {% if i == risk.impact %}checked{% endif %}>
+                                    <label for="new-impact-{{ i }}" class="text-gray-700">
+                                        {{ i }} - {{ ['ضعيف', 'محدود', 'متوسط', 'كبير', 'كارثي'][i-1] }}
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-gray-700 mb-3 font-medium">الاحتمالية الجديدة</label>
+                            <div class="space-y-2">
+                                {% for i in range(1, 6) %}
+                                <div class="flex items-center">
+                                    <input type="radio" id="new-likelihood-{{ i }}" name="likelihood_score" value="{{ i }}" class="ml-2" {% if i == risk.likelihood %}checked{% endif %}>
+                                    <label for="new-likelihood-{{ i }}" class="text-gray-700">
+                                        {{ i }} - {{ ['نادر', 'منخفض', 'متوسط', 'مرتفع', 'كارثي'][i-1] }}
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">المخاطرة المتبقية (بعد الضوابط)</label>
+                        <div class="flex items-center space-x-4 space-x-reverse">
+                            <input type="range" 
+                                   id="residual-risk-slider"
+                                   min="1" max="25" step="1" 
+                                   value="{{ risk.risk_score }}"
+                                   class="flex-1"
+                                   oninput="updateResidualRiskValue(this.value)">
+                            <span id="residual-risk-value" class="text-xl font-bold">{{ risk.risk_score }}</span>
+                        </div>
+                        <p class="text-sm text-gray-600 mt-2">درجة المخاطرة المتبقية بعد تطبيق الضوابط والإجراءات</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">تغيير التأثير</label>
+                            <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                    name="impact_change">
+                                <option value="-2">انخفاض كبير (-2)</option>
+                                <option value="-1">انخفاض (-1)</option>
+                                <option value="0" selected>لا تغيير (0)</option>
+                                <option value="1">زيادة (+1)</option>
+                                <option value="2">زيادة كبيرة (+2)</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">تغيير الاحتمالية</label>
+                            <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                    name="likelihood_change">
+                                <option value="-2">انخفاض كبير (-2)</option>
+                                <option value="-1">انخفاض (-1)</option>
+                                <option value="0" selected>لا تغيير (0)</option>
+                                <option value="1">زيادة (+1)</option>
+                                <option value="2">زيادة كبيرة (+2)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">التعليقات</label>
+                        <textarea class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                  name="comments" rows="3" placeholder="أدخل ملاحظاتك عن التقييم..."></textarea>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 mb-2 font-medium">التوصيات</label>
+                        <textarea class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                  name="recommendations" rows="3" placeholder="أدخل توصياتك..."></textarea>
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <input type="checkbox" id="update-risk" name="update_risk" class="ml-2" checked>
+                        <label for="update-risk" class="text-gray-700">تحديث سجل المخاطرة بالقيم الجديدة</label>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 space-x-reverse mt-6">
+                    <button type="button" onclick="closeAssessmentModal()"
+                            class="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                        إلغاء
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center">
+                        <span>حفظ التقييم</span>
+                        <i class="fas fa-save ml-2"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Tab switching
+    let currentTab = 'overview';
+    
+    function switchTab(tabName) {
+        currentTab = tabName;
+        
+        // Hide all tab contents
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.add('hidden');
+        });
+        
+        // Remove active class from all tabs
+        document.querySelectorAll('.tab-button').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        // Show selected tab content
+        document.getElementById(`content-${tabName}`).classList.remove('hidden');
+        
+        // Activate selected tab
+        document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+    
+    // Modal functions
+    function showAddActionModal() {
+        document.getElementById('add-action-modal').classList.remove('hidden');
+    }
+    
+    function closeAddActionModal() {
+        document.getElementById('add-action-modal').classList.add('hidden');
+        document.getElementById('add-action-form').reset();
+    }
+    
+    function showAssessmentModal() {
+        document.getElementById('assessment-modal').classList.remove('hidden');
+    }
+    
+    function closeAssessmentModal() {
+        document.getElementById('assessment-modal').classList.add('hidden');
+        document.getElementById('assessment-form').reset();
+    }
+    
+    function showAddControlModal() {
+        alert('نافذة إضافة ضابط جديد ق

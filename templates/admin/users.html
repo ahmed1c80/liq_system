@@ -779,9 +779,118 @@
         document.getElementById('user-modal').classList.add('hidden');
         document.getElementById('user-form').reset();
     }
+
+
+
+    // Setup form validation
+function setupUserForm() {
+    const form = document.getElementById('user-form');
+    if (form) {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Validate passwords match
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+            
+            if (password && password !== confirmPassword) {
+                showNotification('كلمات المرور غير متطابقة', 'error');
+                return;
+            }
+            
+            // Validate required fields
+            const requiredFields = form.querySelectorAll('[required]');
+            let isValid = true;
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    isValid = false;
+                    field.classList.add('is-invalid');
+                } else {
+                    field.classList.remove('is-invalid');
+                }
+            });
+            
+            if (!isValid) {
+                showNotification('يرجى ملء جميع الحقول المطلوبة', 'error');
+                return;
+            }
+            
+            // Show loading
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+            submitBtn.disabled = true;
+            
+            try {
+                // Create form data
+                const formData = new FormData(this);
+                
+                // Send request
+                const response = await fetch(this.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest' // للكشف عن طلبات AJAX
+                    }
+                });
+                
+                if (response.redirected) {
+                    // تمت إعادة التوجيه (نجاح)
+                    showNotification('تم حفظ المستخدم بنجاح', 'success');
+                    setTimeout(() => {
+                     //   window.location.href = response.url;
+                    }, 1500);
+                } else if (response.ok) {
+                    // الصفحة أعادت HTML (عادة مع أخطاء)
+                    const html = await response.text();
+                    
+                    // إنشاء عنصر مؤقت لتحليل HTML
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = html;
+                    
+                    // البحث عن رسائل الخطأ في الصفحة
+                    const errorDiv = tempDiv.querySelector('.alert-error, .alert-danger, .error');
+                    if (errorDiv) {
+                        showNotification(errorDiv.textContent.trim(), 'error');
+                    } else {
+                        showNotification('حدث خطأ غير معروف', 'error');
+                    }
+                } else {
+                    showNotification('حدث خطأ في الخادم', 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showNotification('خطأ في الاتصال بالخادم', 'error');
+            } finally {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        });
+    }
+}
+
+// دالة لعرض الإشعارات
+function showNotification(message, type = 'info') {
+    // يمكنك استخدام مكتبة مثل Toastr أو إنشاء إشعار مخصص
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type} alert-dismissible fade show`;
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="close" data-dismiss="alert">
+            <span>&times;</span>
+        </button>
+    `;
+    
+    const container = document.querySelector('.notification-container') || document.body;
+    container.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.remove();
+    }, 5000);
+}
     
     // Setup form validation
-    function setupUserForm() {
+    function setupUserForm2() {
         const form = document.getElementById('user-form');
         if (form) {
             form.addEventListener('submit', async function(e) {

@@ -1,0 +1,989 @@
+{% extends "base.html" %}
+
+{% block title %}لوحة تحكم إدارة المخاطر{% endblock %}
+
+{% block extra_css %}
+<style>
+    .risk-card {
+        transition: all 0.3s ease;
+    }
+    
+    .risk-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .risk-matrix-cell {
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        transition: all 0.2s ease;
+    }
+    
+    .risk-matrix-cell:hover {
+        transform: scale(1.05);
+        z-index: 10;
+    }
+    
+    .kri-indicator {
+        border-right: 4px solid;
+        padding-right: 1rem;
+    }
+    
+    .kri-green {
+        border-right-color: #10b981;
+        background: linear-gradient(to left, #f0fdf4, #ffffff);
+    }
+    
+    .kri-yellow {
+        border-right-color: #f59e0b;
+        background: linear-gradient(to left, #fefce8, #ffffff);
+    }
+    
+    .kri-red {
+        border-right-color: #ef4444;
+        background: linear-gradient(to left, #fef2f2, #ffffff);
+    }
+    
+    .timeline-item {
+        position: relative;
+        padding-right: 2rem;
+    }
+    
+    .timeline-item:before {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e5e7eb;
+    }
+    
+    .timeline-item:last-child:before {
+        display: none;
+    }
+    
+    .timeline-dot {
+        position: absolute;
+        right: -0.5rem;
+        top: 1rem;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        border: 3px solid white;
+        z-index: 1;
+    }
+    
+    .gauge-container {
+        position: relative;
+        width: 150px;
+        height: 75px;
+    }
+    
+    .gauge-background {
+        position: absolute;
+        width: 150px;
+        height: 75px;
+        border-radius: 150px 150px 0 0;
+        overflow: hidden;
+    }
+    
+    .gauge-fill {
+        position: absolute;
+        width: 150px;
+        height: 75px;
+        border-radius: 150px 150px 0 0;
+        transform-origin: center bottom;
+        transform: rotate(0deg);
+        transition: transform 1s ease;
+    }
+    
+    .gauge-cover {
+        position: absolute;
+        width: 120px;
+        height: 60px;
+        background: white;
+        border-radius: 120px 120px 0 0;
+        top: 15px;
+        right: 15px;
+    }
+    
+    .heatmap-cell {
+        width: 30px;
+        height: 30px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .heatmap-cell:hover {
+        transform: scale(1.1);
+        z-index: 10;
+    }
+    
+    /* Risk colors */
+    .risk-critical { background-color: #dc2626; color: white; }
+    .risk-high { background-color: #ea580c; color: white; }
+    .risk-medium { background-color: #ca8a04; color: white; }
+    .risk-low { background-color: #16a34a; color: white; }
+    
+    /* Category colors */
+    .category-credit { border-right-color: #ef4444; }
+    .category-market { border-right-color: #f59e0b; }
+    .category-operational { border-right-color: #10b981; }
+    .category-liquidity { border-right-color: #3b82f6; }
+    .category-strategic { border-right-color: #8b5cf6; }
+    .category-reputation { border-right-color: #ec4899; }
+    .category-compliance { border-right-color: #6366f1; }
+    .category-financial { border-right-color: #14b8a6; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate__animated animate__fadeIn">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-2">لوحة تحكم إدارة المخاطر</h1>
+                <p class="text-gray-600">مراقبة وتحليل المخاطر وفق معايير Basel III</p>
+            </div>
+            
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <button onclick="showAddRiskModal()"
+                        class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center">
+                    <i class="fas fa-plus-circle ml-2"></i>
+                    تسجيل خطر جديد
+                </button>
+                
+                <button onclick="generateRiskReport()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                    <i class="fas fa-file-pdf ml-2"></i>
+                    تقرير المخاطر
+                </button>
+            </div>
+        </div>
+        
+        <!-- Risk Management Status -->
+        <div class="mt-4 flex flex-wrap gap-2">
+            <div class="flex items-center text-sm">
+                <div class="w-2 h-2 bg-green-500 rounded-full ml-2 animate-pulse"></div>
+                <span>نظام إدارة المخاطر: نشط</span>
+            </div>
+            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Basel III متوافق</span>
+            <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">المعايير: SAMA</span>
+            <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">الإصدار: v2.1</span>
+        </div>
+    </div>
+    
+    <!-- Risk Overview Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <!-- Total Risks -->
+        <div class="bg-white rounded-xl shadow p-5 risk-card">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">إجمالي المخاطر</p>
+                    <h3 class="text-2xl font-bold text-gray-800">147</h3>
+                </div>
+                <div class="bg-red-100 p-3 rounded-lg">
+                    <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="mt-3">
+                <div class="flex justify-between text-xs text-gray-600 mb-1">
+                    <span>عالية: 12</span>
+                    <span>متوسطة: 45</span>
+                    <span>منخفضة: 90</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="h-2 rounded-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500" 
+                         style="width: 100%"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Open Risks -->
+        <div class="bg-white rounded-xl shadow p-5 risk-card">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">المخاطر المفتوحة</p>
+                    <h3 class="text-2xl font-bold text-yellow-600">89</h3>
+                </div>
+                <div class="bg-yellow-100 p-3 rounded-lg">
+                    <i class="fas fa-clock text-yellow-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="mt-3">
+                <div class="flex justify-between text-xs text-gray-600">
+                    <span>متأخرة: 5</span>
+                    <span>قيد المعالجة: 32</span>
+                    <span>جديدة: 52</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Risk Exposure -->
+        <div class="bg-white rounded-xl shadow p-5 risk-card">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">التعرض للمخاطر</p>
+                    <h3 class="text-2xl font-bold text-purple-600">4.2M ر.س</h3>
+                </div>
+                <div class="bg-purple-100 p-3 rounded-lg">
+                    <i class="fas fa-chart-line text-purple-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="mt-3">
+                <div class="text-xs text-gray-600">
+                    <span class="text-green-600">▼ 8%</span> عن الشهر الماضي
+                </div>
+            </div>
+        </div>
+        
+        <!-- Basel III Compliance -->
+        <div class="bg-white rounded-xl shadow p-5 risk-card">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm mb-1">توافق Basel III</p>
+                    <h3 class="text-2xl font-bold text-green-600">96%</h3>
+                </div>
+                <div class="bg-green-100 p-3 rounded-lg">
+                    <i class="fas fa-shield-check text-green-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="mt-3">
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="h-2 rounded-full bg-green-500" style="width: 96%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column: Risk Matrix & Top Risks -->
+        <div class="lg:col-span-2">
+            <!-- Risk Matrix -->
+            <div class="bg-white rounded-xl shadow mb-6">
+                <div class="p-6 border-b">
+                    <h2 class="text-xl font-bold text-gray-800">مصفوفة تقييم المخاطر</h2>
+                    <p class="text-gray-600 text-sm mt-1">تقييم المخاطر بناءً على التأثير والاحتمالية</p>
+                </div>
+                
+                <div class="p-6">
+                    <div class="mb-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-gray-700">توزيع المخاطر</h3>
+                            <div class="flex items-center space-x-3 space-x-reverse">
+                                <div class="flex items-center">
+                                    <div class="w-3 h-3 bg-red-600 rounded ml-2"></div>
+                                    <span class="text-sm">حرجة</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <div class="w-3 h-3 bg-orange-500 rounded ml-2"></div>
+                                    <span class="text-sm">عالية</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <div class="w-3 h-3 bg-yellow-500 rounded ml-2"></div>
+                                    <span class="text-sm">متوسطة</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <div class="w-3 h-3 bg-green-600 rounded ml-2"></div>
+                                    <span class="text-sm">منخفضة</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Risk Matrix Grid -->
+                        <div class="border border-gray-200 rounded-lg overflow-hidden">
+                            <!-- Matrix Header -->
+                            <div class="grid grid-cols-6 bg-gray-50 border-b">
+                                <div class="p-3 border-l border-gray-200"></div>
+                                <div class="p-3 border-l border-gray-200 text-center font-bold">تأثير ضعيف (1)</div>
+                                <div class="p-3 border-l border-gray-200 text-center font-bold">تأثير محدود (2)</div>
+                                <div class="p-3 border-l border-gray-200 text-center font-bold">تأثير متوسط (3)</div>
+                                <div class="p-3 border-l border-gray-200 text-center font-bold">تأثير كبير (4)</div>
+                                <div class="p-3 border-l border-gray-200 text-center font-bold">تأثير كارثي (5)</div>
+                            </div>
+                            
+                            <!-- Matrix Rows -->
+                            <div class="grid grid-cols-6 border-b">
+                                <div class="p-3 border-l border-gray-200 bg-gray-50 font-bold text-center flex items-center justify-center">
+                                    احتمال كارثي (5)
+                                </div>
+                                {% for impact in range(1, 6) %}
+                                {% set score = impact * 5 %}
+                                {% set level = 'low' if score <= 4 else 'medium' if score <= 9 else 'high' if score <= 19 else 'critical' %}
+                                <div class="risk-matrix-cell {{ 'risk-' + level }} border-l border-gray-200 cursor-pointer hover:opacity-90"
+                                     onclick="showRisksInMatrix({{ impact }}, 5)">
+                                    <span>{{ score }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <div class="grid grid-cols-6 border-b">
+                                <div class="p-3 border-l border-gray-200 bg-gray-50 font-bold text-center flex items-center justify-center">
+                                    احتمال مرتفع (4)
+                                </div>
+                                {% for impact in range(1, 6) %}
+                                {% set score = impact * 4 %}
+                                {% set level = 'low' if score <= 4 else 'medium' if score <= 9 else 'high' if score <= 19 else 'critical' %}
+                                <div class="risk-matrix-cell {{ 'risk-' + level }} border-l border-gray-200 cursor-pointer hover:opacity-90"
+                                     onclick="showRisksInMatrix({{ impact }}, 4)">
+                                    <span>{{ score }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <div class="grid grid-cols-6 border-b">
+                                <div class="p-3 border-l border-gray-200 bg-gray-50 font-bold text-center flex items-center justify-center">
+                                    احتمال متوسط (3)
+                                </div>
+                                {% for impact in range(1, 6) %}
+                                {% set score = impact * 3 %}
+                                {% set level = 'low' if score <= 4 else 'medium' if score <= 9 else 'high' if score <= 19 else 'critical' %}
+                                <div class="risk-matrix-cell {{ 'risk-' + level }} border-l border-gray-200 cursor-pointer hover:opacity-90"
+                                     onclick="showRisksInMatrix({{ impact }}, 3)">
+                                    <span>{{ score }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <div class="grid grid-cols-6 border-b">
+                                <div class="p-3 border-l border-gray-200 bg-gray-50 font-bold text-center flex items-center justify-center">
+                                    احتمال منخفض (2)
+                                </div>
+                                {% for impact in range(1, 6) %}
+                                {% set score = impact * 2 %}
+                                {% set level = 'low' if score <= 4 else 'medium' if score <= 9 else 'high' if score <= 19 else 'critical' %}
+                                <div class="risk-matrix-cell {{ 'risk-' + level }} border-l border-gray-200 cursor-pointer hover:opacity-90"
+                                     onclick="showRisksInMatrix({{ impact }}, 2)">
+                                    <span>{{ score }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <div class="grid grid-cols-6">
+                                <div class="p-3 border-l border-gray-200 bg-gray-50 font-bold text-center flex items-center justify-center">
+                                    احتمال نادر (1)
+                                </div>
+                                {% for impact in range(1, 6) %}
+                                {% set score = impact * 1 %}
+                                {% set level = 'low' if score <= 4 else 'medium' if score <= 9 else 'high' if score <= 19 else 'critical' %}
+                                <div class="risk-matrix-cell {{ 'risk-' + level }} border-l border-gray-200 cursor-pointer hover:opacity-90"
+                                     onclick="showRisksInMatrix({{ impact }}, 1)">
+                                    <span>{{ score }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Risk Heatmap by Category -->
+                    <div>
+                        <h3 class="font-bold text-gray-700 mb-4">خريطة حرارة المخاطر حسب التصنيف</h3>
+                        <div class="grid grid-cols-4 gap-4">
+                            {% for category in risk_categories %}
+                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center">
+                                        <div class="w-3 h-3 rounded-full ml-2" style="background-color: {{ category.color }}"></div>
+                                        <span class="font-medium">{{ category.name }}</span>
+                                    </div>
+                                    <span class="text-sm text-gray-600">{{ category.risk_count }} مخاطر</span>
+                                </div>
+                                <div class="grid grid-cols-3 gap-1">
+                                    {% for i in range(6) %}
+                                    <div class="heatmap-cell {% if i < 2 %}bg-green-100 text-green-800{% elif i < 4 %}bg-yellow-100 text-yellow-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                        {{ i + 1 }}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Top Risks -->
+            <div class="bg-white rounded-xl shadow">
+                <div class="p-6 border-b">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-gray-800">أهم المخاطر الناشئة</h2>
+                        <a href="{{ url_for('risk_register') }}" class="text-blue-600 hover:text-blue-800 text-sm">
+                            عرض جميع المخاطر <i class="fas fa-arrow-left mr-1"></i>
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="p-6">
+                    <div class="space-y-4">
+                        {% for risk in top_risks %}
+                        <div class="risk-card border border-gray-200 rounded-lg p-4 hover:border-{{ risk.priority_color }}-300 transition-colors">
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="flex-1">
+                                    <div class="flex items-center mb-2">
+                                        <span class="px-3 py-1 rounded-full text-xs font-medium mr-3 
+                                            {% if risk.priority == 'critical' %}bg-red-100 text-red-800
+                                            {% elif risk.priority == 'high' %}bg-orange-100 text-orange-800
+                                            {% elif risk.priority == 'medium' %}bg-yellow-100 text-yellow-800
+                                            {% else %}bg-green-100 text-green-800{% endif %}">
+                                            {{ risk.priority_ar }}
+                                        </span>
+                                        <span class="px-2 py-1 rounded text-xs font-medium mr-3 bg-gray-100 text-gray-800">
+                                            {{ risk.category_name }}
+                                        </span>
+                                        <span class="text-sm text-gray-600">{{ risk.branch_name }}</span>
+                                    </div>
+                                    <h4 class="font-bold text-gray-800 text-lg mb-2">{{ risk.title }}</h4>
+                                    <p class="text-gray-600 text-sm mb-3">{{ risk.description[:150] }}...</p>
+                                </div>
+                                <div class="text-right ml-4">
+                                    <div class="text-2xl font-bold mb-1 {% if risk.risk_score >= 20 %}text-red-600{% elif risk.risk_score >= 10 %}text-orange-600{% elif risk.risk_score >= 5 %}text-yellow-600{% else %}text-green-600{% endif %}">
+                                        {{ risk.risk_score }}
+                                    </div>
+                                    <div class="text-xs text-gray-600">درجة المخاطرة</div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex justify-between items-center border-t pt-3">
+                                <div class="flex items-center text-sm text-gray-600">
+                                    <i class="fas fa-user ml-2"></i>
+                                    <span>{{ risk.owner_name }}</span>
+                                    <i class="fas fa-calendar-alt mr-4 ml-4"></i>
+                                    <span>{{ risk.identified_date.strftime('%Y-%m-%d') }}</span>
+                                </div>
+                                <div class="flex space-x-2 space-x-reverse">
+                                    <button onclick="viewRiskDetails({{ risk.id }})"
+                                            class="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                        <i class="fas fa-eye ml-1"></i> عرض
+                                    </button>
+                                    <button onclick="showRiskAssessment({{ risk.id }})"
+                                            class="px-3 py-1 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                        <i class="fas fa-chart-line ml-1"></i> تقييم
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column: KRIs & Quick Actions -->
+        <div class="space-y-6">
+            <!-- Key Risk Indicators -->
+            <div class="bg-white rounded-xl shadow p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">مؤشرات المخاطر الرئيسية (KRI)</h2>
+                    <button onclick="refreshKRIs()" class="text-blue-600 hover:text-blue-800">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    {% for kri in kris %}
+                    <div class="kri-indicator p-4 rounded-lg {% if kri.status == 'green' %}kri-green{% elif kri.status == 'yellow' %}kri-yellow{% else %}kri-red{% endif %}">
+                        <div class="flex justify-between items-center mb-2">
+                            <div>
+                                <h4 class="font-bold text-gray-800">{{ kri.name }}</h4>
+                                <p class="text-sm text-gray-600">{{ kri.category }} • {{ kri.unit }}</p>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-lg font-bold {% if kri.status == 'green' %}text-green-600{% elif kri.status == 'yellow' %}text-yellow-600{% else %}text-red-600{% endif %}">
+                                    {{ kri.value }}{{ kri.unit if kri.unit != '%' else '' }}{{ '%' if kri.unit == '%' else '' }}
+                                </div>
+                                <div class="text-xs text-gray-600">{{ kri.branch }}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center text-sm">
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 rounded-full mr-2 {% if kri.status == 'green' %}bg-green-500{% elif kri.status == 'yellow' %}bg-yellow-500{% else %}bg-red-500{% endif %}"></div>
+                                <span class="{% if kri.status == 'green' %}text-green-700{% elif kri.status == 'yellow' %}text-yellow-700{% else %}text-red-700{% endif %}">
+                                    {{ 'ضمن النطاق الآمن' if kri.status == 'green' else 'تحت المراقبة' if kri.status == 'yellow' else 'خارج النطاق الآمن' }}
+                                </span>
+                            </div>
+                            <span class="text-gray-600">{{ kri.last_updated }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="mt-6">
+                    <a href="{{ url_for('kri_monitoring') }}" class="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center justify-center">
+                        <span>مراقبة جميع المؤشرات</span>
+                        <i class="fas fa-arrow-left ml-2"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Risk Incidents -->
+            <div class="bg-white rounded-xl shadow p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">آخر الحوادث</h2>
+                    <span class="bg-red-100 text-red-800 text-sm px-3 py-1 rounded-full">
+                        {{ incidents|length }} حوادث
+                    </span>
+                </div>
+                
+                <div class="space-y-4 max-h-64 overflow-y-auto custom-scrollbar">
+                    {% for incident in incidents %}
+                    <div class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-medium text-gray-800">{{ incident.title }}</h4>
+                            <span class="px-2 py-1 bg-red-100 text-red-800 text-xs rounded">
+                                {{ incident.severity_ar }}
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-600 mb-2">{{ incident.description[:80] }}...</p>
+                        <div class="flex justify-between text-xs text-gray-500">
+                            <span>{{ incident.branch_name }}</span>
+                            <span>{{ incident.incident_date.strftime('%Y-%m-%d') }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="mt-6">
+                    <button onclick="reportIncident()"
+                            class="w-full py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center justify-center">
+                        <i class="fas fa-exclamation-circle ml-2"></i>
+                        إبلاغ عن حادث
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-xl shadow p-6">
+                <h2 class="text-xl font-bold mb-6">إجراءات سريعة</h2>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="showAddRiskModal()"
+                            class="p-3 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition flex flex-col items-center justify-center">
+                        <i class="fas fa-exclamation-triangle text-xl mb-2"></i>
+                        <span class="text-sm font-medium">تسجيل خطر</span>
+                    </button>
+                    
+                    <button onclick="showRiskAssessmentModal()"
+                            class="p-3 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition flex flex-col items-center justify-center">
+                        <i class="fas fa-chart-line text-xl mb-2"></i>
+                        <span class="text-sm font-medium">تقييم المخاطر</span>
+                    </button>
+                    
+                    <button onclick="showRiskControlModal()"
+                            class="p-3 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition flex flex-col items-center justify-center">
+                        <i class="fas fa-shield-alt text-xl mb-2"></i>
+                        <span class="text-sm font-medium">ضوابط جديدة</span>
+                    </button>
+                    
+                    <button onclick="generateBaselReport()"
+                            class="p-3 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition flex flex-col items-center justify-center">
+                        <i class="fas fa-file-contract text-xl mb-2"></i>
+                        <span class="text-sm font-medium">تقرير Basel</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Basel III Compliance -->
+            <div class="bg-white rounded-xl shadow p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-6">توافق Basel III</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-gray-600">نسبة السيولة (LCR)</span>
+                            <span class="font-bold text-green-600">125%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="h-2 rounded-full bg-green-500" style="width: 100%"></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-gray-600">صافي تمويل مستقر (NSFR)</span>
+                            <span class="font-bold text-green-600">112%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="h-2 rounded-full bg-green-500" style="width: 100%"></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-gray-600">رأس المال (CAR)</span>
+                            <span class="font-bold text-green-600">15.2%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="h-2 rounded-full bg-green-500" style="width: 100%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="pt-4 border-t">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-700">مستوى التوافق العام:</span>
+                            <span class="font-bold text-green-600">ممتاز</span>
+                        </div>
+                        <div class="text-xs text-gray-600 mt-1">آخر تحديث: {{ now().strftime('%Y-%m-%d') }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<!-- Add Risk Modal -->
+<div id="add-risk-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl animate__animated animate__zoomIn max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800">تسجيل خطر جديد</h3>
+                <button onclick="closeAddRiskModal()" 
+                        class="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <form id="add-risk-form">
+                <div class="space-y-6">
+                    <!-- Basic Information -->
+                    <div>
+                        <h4 class="font-bold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-info-circle text-blue-600 ml-3"></i>
+                            المعلومات الأساسية
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">عنوان الخطر</label>
+                                <input type="text" 
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                       name="title" required>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">التصنيف</label>
+                                <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                        name="category_id" required>
+                                    <option value="">اختر تصنيف المخاطرة</option>
+                                    {% for category in risk_categories %}
+                                    <option value="{{ category.id }}">{{ category.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">الفرع</label>
+                                <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                        name="branch_id" required>
+                                    <option value="">اختر الفرع</option>
+                                    {% for branch in branches %}
+                                    <option value="{{ branch.id }}">{{ branch.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">تصنيف Basel III</label>
+                                <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                        name="basel_category">
+                                    <option value="">اختر تصنيف Basel</option>
+                                    <option value="credit_risk">مخاطر الائتمان</option>
+                                    <option value="market_risk">مخاطر السوق</option>
+                                    <option value="operational_risk">مخاطر التشغيل</option>
+                                    <option value="liquidity_risk">مخاطر السيولة</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <label class="block text-gray-700 mb-2 font-medium">وصف الخطر</label>
+                            <textarea class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                      name="description" rows="3" required></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Risk Assessment -->
+                    <div>
+                        <h4 class="font-bold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-chart-bar text-green-600 ml-3"></i>
+                            تقييم المخاطرة
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">مستوى التأثير</label>
+                                <div class="space-y-2">
+                                    {% for i in range(1, 6) %}
+                                    <div class="flex items-center">
+                                        <input type="radio" id="impact-{{ i }}" name="impact" value="{{ i }}" class="ml-2" {% if i == 3 %}checked{% endif %}>
+                                        <label for="impact-{{ i }}" class="text-gray-700">
+                                            {{ i }} - {{ ['ضعيف', 'محدود', 'متوسط', 'كبير', 'كارثي'][i-1] }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">احتمالية الحدوث</label>
+                                <div class="space-y-2">
+                                    {% for i in range(1, 6) %}
+                                    <div class="flex items-center">
+                                        <input type="radio" id="likelihood-{{ i }}" name="likelihood" value="{{ i }}" class="ml-2" {% if i == 3 %}checked{% endif %}>
+                                        <label for="likelihood-{{ i }}" class="text-gray-700">
+                                            {{ i }} - {{ ['نادر', 'منخفض', 'متوسط', 'مرتفع', 'كارثي'][i-1] }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">الأولوية</label>
+                                <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                        name="priority">
+                                    <option value="low">منخفضة</option>
+                                    <option value="medium" selected>متوسطة</option>
+                                    <option value="high">عالية</option>
+                                    <option value="critical">حرجة</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">تاريخ الحل المستهدف</label>
+                                <input type="date" 
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                       name="target_resolution_date">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Financial Impact -->
+                    <div>
+                        <h4 class="font-bold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-money-bill-wave text-purple-600 ml-3"></i>
+                            الأثر المالي
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">الخسارة المحتملة (ر.س)</label>
+                                <input type="number" step="0.01" min="0"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                       name="potential_loss">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">تكلفة المعالجة (ر.س)</label>
+                                <input type="number" step="0.01" min="0"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                       name="mitigation_cost">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">متطلبات رأس المال (ر.س)</label>
+                                <input type="number" step="0.01" min="0"
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                       name="capital_requirement">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Responsibility -->
+                    <div>
+                        <h4 class="font-bold text-gray-800 mb-4 flex items-center">
+                            <i class="fas fa-user-tie text-red-600 ml-3"></i>
+                            المسؤولية
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">مالك الخطر</label>
+                                <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                        name="owner_id">
+                                    <option value="">اختر مالك الخطر</option>
+                                    {% for user in users %}
+                                    <option value="{{ user.id }}">{{ user.username }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">مسؤول المتابعة</label>
+                                <select class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                        name="assigned_to_id">
+                                    <option value="">اختر مسؤول المتابعة</option>
+                                    {% for user in users %}
+                                    <option value="{{ user.id }}">{{ user.username }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 space-x-reverse mt-6">
+                    <button type="button" onclick="closeAddRiskModal()"
+                            class="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                        إلغاء
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center">
+                        <span>تسجيل الخطر</span>
+                        <i class="fas fa-save ml-2"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initialize risk management
+    let riskCategories = {{ risk_categories|tojson|safe }};
+    let branches =  branches|tojson|safe }};
+    let users =  users|tojson|safe }};
+    
+    // Show add risk modal
+    function showAddRiskModal() {
+        document.getElementById('add-risk-modal').classList.remove('hidden');
+    }
+    
+    function closeAddRiskModal() {
+        document.getElementById('add-risk-modal').classList.add('hidden');
+        document.getElementById('add-risk-form').reset();
+    }
+    
+    // Handle risk form submission
+    document.getElementById('add-risk-form')?.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const data = Object.fromEntries(formData.entries());
+        
+        // Calculate risk score
+        data.risk_score = parseInt(data.impact) * parseInt(data.likelihood);
+        
+        // Show loading
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+        submitBtn.disabled = true;
+        
+        try {
+            const response = await fetch('/api/risks/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                showSuccess('تم تسجيل الخطر', 'تم تسجيل الخطر بنجاح في النظام.');
+                closeAddRiskModal();
+                
+                // Refresh page after delay
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                alert(result.error || 'حدث خطأ أثناء تسجيل الخطر');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('خطأ في الاتصال بالخادم');
+        } finally {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+    
+    // View risk details
+    function viewRiskDetails(riskId) {
+        window.location.href = `/risk/${riskId}`;
+    }
+    
+    // Show risks in matrix
+    function showRisksInMatrix(impact, likelihood) {
+        const score = impact * likelihood;
+        alert(`عرض المخاطر بدرجة ${score} (تأثير: ${impact}, احتمالية: ${likelihood})`);
+        // In real app, filter and show risks
+    }
+    
+    // Refresh KRIs
+    function refreshKRIs() {
+        // Simulate refresh
+        alert('جاري تحديث مؤشرات المخاطر...');
+        setTimeout(() => {
+            location.reload();
+        }, 1000);
+    }
+    
+    // Report incident
+    function reportIncident() {
+        alert('نافذة إبلاغ الحوادث قريباً...');
+    }
+    
+    // Generate risk report
+    function generateRiskReport() {
+        const btn = event?.target?.closest('button');
+        if (btn) {
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                alert('✅ تم إنشاء تقرير المخاطر بنجاح');
+                
+                // Create download link
+                const link = document.createElement('a');
+                link.href = '#';
+                link.download = `تقرير_المخاطر_${new Date().toISOString().split('T')[0]}.pdf`;
+                link.click();
+            }, 2000);
+        }
+    }
+    
+    // Generate Basel report
+    function generateBaselReport() {
+        alert('جاري إنشاء تقرير Basel III...');
+    }
+    
+    // Show risk assessment modal
+    function showRiskAssessmentModal() {
+        alert('نافذة تقييم المخاطر قريباً...');
+    }
+    
+    // Show risk control modal
+    function showRiskControlModal() {
+        alert('نافذة إضافة ضوابط جديدة قريباً...');
+    }
+    
+    // Show success message
+    function showSuccess(title, message) {
+        alert(`✅ ${title}\n${message}`);
+    }
+    
+    // Close modal when clicking outside
+    document.getElementById('add-risk-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeAddRiskModal();
+        }
+    });
+</script>
+{% endblock %}

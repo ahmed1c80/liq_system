@@ -355,6 +355,62 @@
                             </a>
                         </li>
                     -->
+
+
+
+
+
+
+<!--
+{% if current_user.role in ['admin', 'risk_manager', 'branch_manager', 'auditor'] %}
+<li class="mt-6">
+    <h3 class="text-sm font-semibold text-gray-400 mb-3 px-3 uppercase tracking-wider">إدارة المخاطر</h3>
+    <ul class="space-y-1">
+        <li>
+            <a href="{{ url_for('risk_dashboard') }}" 
+               class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors {% if request.endpoint == 'risk_dashboard' %}bg-gray-700 bg-opacity-50 border-r-4 border-red-500{% endif %}">
+                <i class="fas fa-shield-alt ml-3 text-lg text-red-400"></i>
+                <span class="sidebar-text">لوحة المخاطر</span>
+            </a>
+        </li>
+        
+        <li>
+            <a href="{{ url_for('risk_register') }}" 
+               class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors {% if request.endpoint == 'risk_register' %}bg-gray-700 bg-opacity-50 border-r-4 border-red-500{% endif %}">
+                <i class="fas fa-clipboard-list ml-3 text-lg text-orange-400"></i>
+                <span class="sidebar-text">سجل المخاطر</span>
+            </a>
+        </li>
+        
+        <li>
+            <a href="{{ url_for('risk_incidents') }}" 
+               class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors {% if request.endpoint == 'risk_incidents' %}bg-gray-700 bg-opacity-50 border-r-4 border-red-500{% endif %}">
+                <i class="fas fa-exclamation-circle ml-3 text-lg text-yellow-400"></i>
+                <span class="sidebar-text">حوادث المخاطر</span>
+            </a>
+        </li>
+        
+        <li>
+            <a href="{{ url_for('kri_monitoring') }}" 
+               class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors {% if request.endpoint == 'kri_monitoring' %}bg-gray-700 bg-opacity-50 border-r-4 border-red-500{% endif %}">
+                <i class="fas fa-chart-line ml-3 text-lg text-green-400"></i>
+                <span class="sidebar-text">مؤشرات المخاطر</span>
+            </a>
+        </li>
+        
+        <li>
+            <a href="{{ url_for('risk_reports') }}" 
+               class="flex items-center p-3 rounded-lg hover:bg-gray-700 transition-colors {% if request.endpoint == 'risk_reports' %}bg-gray-700 bg-opacity-50 border-r-4 border-red-500{% endif %}">
+                <i class="fas fa-file-contract ml-3 text-lg text-blue-400"></i>
+                <span class="sidebar-text">تقارير المخاطر</span>
+            </a>
+        </li>
+    </ul>
+</li>
+{% endif %}
+-->
+
+
                     </ul>
                 </div>
                 

@@ -1,0 +1,1152 @@
+{% extends "base.html" %}
+
+{% block title %}سجل المخاطر{% endblock %}
+
+{% block extra_css %}
+<style>
+    .risk-card {
+        transition: all 0.3s ease;
+    }
+    
+    .risk-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .filter-pill {
+        transition: all 0.2s ease;
+    }
+    
+    .filter-pill.active {
+        background-color: #3b82f6;
+        color: white;
+    }
+    
+    .priority-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .status-badge {
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .category-tag {
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 500;
+    }
+    
+    .progress-bar {
+        height: 6px;
+        border-radius: 3px;
+        overflow: hidden;
+        background-color: #e5e7eb;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.5s ease;
+    }
+    
+    .table-header {
+        position: sticky;
+        top: 0;
+        background-color: white;
+        z-index: 10;
+    }
+    
+    .action-btn {
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        transition: all 0.2s ease;
+    }
+    
+    .action-btn:hover {
+        transform: translateY(-1px);
+    }
+    
+    /* Risk score colors */
+    .score-critical { color: #dc2626; }
+    .score-high { color: #ea580c; }
+    .score-medium { color: #ca8a04; }
+    .score-low { color: #16a34a; }
+    
+    /* Status colors */
+    .status-open { background-color: #fef3c7; color: #92400e; }
+    .status-in-progress { background-color: #dbeafe; color: #1e40af; }
+    .status-mitigated { background-color: #d1fae5; color: #065f46; }
+    .status-closed { background-color: #e5e7eb; color: #374151; }
+    
+    /* Priority colors */
+    .priority-critical { background-color: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
+    .priority-high { background-color: #fff7ed; color: #ea580c; border: 1px solid #fdba74; }
+    .priority-medium { background-color: #fefce8; color: #ca8a04; border: 1px solid #fde047; }
+    .priority-low { background-color: #f0fdf4; color: #16a34a; border: 1px solid #86efac; }
+    
+    /* Category colors */
+    .category-credit { background-color: #fef2f2; color: #dc2626; }
+    .category-market { background-color: #fff7ed; color: #ea580c; }
+    .category-operational { background-color: #f0fdf4; color: #16a34a; }
+    .category-liquidity { background-color: #eff6ff; color: #1d4ed8; }
+    .category-strategic { background-color: #faf5ff; color: #7c3aed; }
+    .category-reputation { background-color: #fdf2f8; color: #db2777; }
+    .category-compliance { background-color: #eef2ff; color: #4f46e5; }
+    .category-financial { background-color: #ecfdf5; color: #059669; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate__animated animate__fadeIn">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-2">سجل المخاطر</h1>
+                <p class="text-gray-600">إدارة وتتبع جميع المخاطر في المؤسسة</p>
+            </div>
+            
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <button onclick="exportRisks()"
+                        class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center">
+                    <i class="fas fa-file-export ml-2"></i>
+                    تصدير
+                </button>
+                
+                <button onclick="showAddRiskModal()"
+                        class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center">
+                    <i class="fas fa-plus-circle ml-2"></i>
+                    خطر جديد
+                </button>
+                
+                {% if user_role == 'admin' or user_role == 'risk_manager' %}
+                <button onclick="bulkUpdateRisks()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                    <i class="fas fa-edit ml-2"></i>
+                    تحديث جماعي
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Stats Summary -->
+        <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-white rounded-lg border p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">إجمالي المخاطر</p>
+                        <h3 class="text-xl font-bold text-gray-800">{{ risks|length }}</h3>
+                    </div>
+                    <i class="fas fa-exclamation-triangle text-red-500"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg border p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">المخاطر النشطة</p>
+                        <h3 class="text-xl font-bold text-yellow-600">
+                            {{ risks|selectattr('status', 'equalto', 'open')|list|length + 
+                               risks|selectattr('status', 'equalto', 'in_progress')|list|length }}
+                        </h3>
+                    </div>
+                    <i class="fas fa-clock text-yellow-500"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg border p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">المعالجة</p>
+                        <h3 class="text-xl font-bold text-green-600">
+                            {{ risks|selectattr('status', 'equalto', 'mitigated')|list|length }}
+                        </h3>
+                    </div>
+                    <i class="fas fa-check-circle text-green-500"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg border p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">متوسط درجة المخاطرة</p>
+                        <h3 class="text-xl font-bold text-purple-600">
+                            {% if risks %}
+                                {{ "%.1f"|format(risks|sum(attribute='risk_score') / risks|length) }}
+                            {% else %}
+                                0.0
+                            {% endif %}
+                        </h3>
+                    </div>
+                    <i class="fas fa-chart-line text-purple-500"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filters and Search -->
+    <div class="bg-white rounded-xl shadow mb-6">
+        <div class="p-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                <div class="flex-1">
+                    <div class="relative">
+                        <input type="text" 
+                               id="search-risks"
+                               class="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                               placeholder="ابحث عن مخاطر...">
+                        <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <select id="sort-risks"
+                            class="p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        <option value="date_desc">الأحدث أولاً</option>
+                        <option value="date_asc">الأقدم أولاً</option>
+                        <option value="score_desc">الأعلى درجة</option>
+                        <option value="score_asc">الأقل درجة</option>
+                        <option value="priority">حسب الأولوية</option>
+                    </select>
+                    
+                    <button onclick="showAdvancedFilters()"
+                            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center">
+                        <i class="fas fa-filter ml-2"></i>
+                        فلتر
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Quick Filters -->
+            <div class="mb-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">فلتر سريع:</h3>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="filterRisks('all')"
+                            class="filter-pill px-3 py-1 bg-blue-600 text-white rounded-full text-sm">
+                        الكل
+                    </button>
+                    <button onclick="filterRisks('open')"
+                            class="filter-pill px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm hover:bg-gray-200">
+                        مفتوحة
+                    </button>
+                    <button onclick="filterRisks('in_progress')"
+                            class="filter-pill px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm hover:bg-blue-200">
+                        قيد المعالجة
+                    </button>
+                    <button onclick="filterRisks('critical')"
+                            class="filter-pill px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm hover:bg-red-200">
+                        حرجة
+                    </button>
+                    <button onclick="filterRisks('high')"
+                            class="filter-pill px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm hover:bg-orange-200">
+                        عالية
+                    </button>
+                    <button onclick="filterRisks('overdue')"
+                            class="filter-pill px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm hover:bg-red-200">
+                        متأخرة
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Category Filters -->
+            <div>
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">تصنيف المخاطر:</h3>
+                <div class="flex flex-wrap gap-2">
+                    {% for category in risk_categories %}
+                    <button onclick="filterByCategory({{ category.id }})"
+                            class="category-tag {{ 'category-' + category.code|lower }} hover:opacity-90 transition-opacity"
+                            style="background-color: {{ category.color }}20; color: {{ category.color }}">
+                        {{ category.name }}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Risks Table -->
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 table-header">
+                    <tr>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">الخطر</th>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">التصنيف</th>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">الفرع</th>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">التقييم</th>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">الحالة</th>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">الموعد النهائي</th>
+                        <th class="py-4 px-6 text-right font-semibold text-gray-700">الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody id="risks-table-body">
+                    {% for risk in risks %}
+                    <tr class="border-b hover:bg-gray-50 transition-colors risk-card" 
+                        data-risk-id="{{ risk.id }}"
+                        data-status="{{ risk.status }}"
+                        data-priority="{{ risk.priority }}"
+                        data-category-id="{{ risk.category_id }}"
+                        data-score="{{ risk.risk_score }}">
+                        <td class="py-4 px-6">
+                            <div class="flex items-start">
+                                <div class="ml-4">
+                                    <div class="flex items-center mb-2">
+                                        <h4 class="font-bold text-gray-800">{{ risk.title }}</h4>
+                                        {% if risk.basel_category %}
+                                        <span class="mr-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                                            Basel III
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="text-sm text-gray-600 mb-2">{{ risk.description[:100] }}...</p>
+                                    <div class="flex items-center text-xs text-gray-500">
+                                        <i class="fas fa-user ml-2"></i>
+                                        <span>{{ risk.owner.username if risk.owner else 'غير محدد' }}</span>
+                                        <i class="fas fa-calendar-alt mr-4 ml-4"></i>
+                                        <span>{{ risk.identified_date.strftime('%Y-%m-%d') }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        
+                        <td class="py-4 px-6">
+                            <div class="flex flex-col space-y-2">
+                                <span class="category-tag {{ 'category-' + risk.category.code|lower }} inline-block"
+                                      style="background-color: {{ risk.category.color }}20; color: {{ risk.category.color }}">
+                                    {{ risk.category.name }}
+                                </span>
+                                {% if risk.basel_category %}
+                                <span class="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
+                                    {{ risk.basel_category }}
+                                </span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        
+                        <td class="py-4 px-6">
+                            <div class="flex items-center">
+                                <i class="fas fa-university text-gray-400 ml-2"></i>
+                                <div>
+                                    <p class="font-medium">{{ risk.branch.name }}</p>
+                                    <p class="text-sm text-gray-600">{{ risk.branch.code }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        
+                        <td class="py-4 px-6">
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-gray-600">الدرجة:</span>
+                                    <span class="font-bold text-lg 
+                                        {% if risk.risk_score >= 20 %}score-critical
+                                        {% elif risk.risk_score >= 10 %}score-high
+                                        {% elif risk.risk_score >= 5 %}score-medium
+                                        {% else %}score-low{% endif %}">
+                                        {{ risk.risk_score }}
+                                    </span>
+                                </div>
+                                
+                                <div class="progress-bar">
+                                    <div class="progress-fill 
+                                        {% if risk.risk_score >= 20 %}bg-red-500
+                                        {% elif risk.risk_score >= 10 %}bg-orange-500
+                                        {% elif risk.risk_score >= 5 %}bg-yellow-500
+                                        {% else %}bg-green-500{% endif %}" 
+                                        style="width: {{ (risk.risk_score / 25 * 100)|min(100) }}%">
+                                    </div>
+                                </div>
+                                
+                                <div class="flex justify-between text-xs text-gray-500">
+                                    <span>تأثير: {{ risk.impact }}/5</span>
+                                    <span>احتمالية: {{ risk.likelihood }}/5</span>
+                                </div>
+                                
+                                <span class="priority-badge {{ 'priority-' + risk.priority }}">
+                                    {% if risk.priority == 'critical' %}حرجة
+                                    {% elif risk.priority == 'high' %}عالية
+                                    {% elif risk.priority == 'medium' %}متوسطة
+                                    {% else %}منخفضة{% endif %}
+                                </span>
+                            </div>
+                        </td>
+                        
+                        <td class="py-4 px-6">
+                            <div class="flex flex-col space-y-2">
+                                <span class="status-badge {{ 'status-' + risk.status }}">
+                                    {% if risk.status == 'open' %}مفتوحة
+                                    {% elif risk.status == 'in_progress' %}قيد المعالجة
+                                    {% elif risk.status == 'mitigated' %}تمت المعالجة
+                                    {% else %}مغلقة{% endif %}
+                                </span>
+                                
+                                {% if risk.assigned_to %}
+                                <div class="flex items-center text-sm text-gray-600">
+                                    <i class="fas fa-user-check ml-2"></i>
+                                    <span>{{ risk.assigned_to.username }}</span>
+                                </div>
+                                {% endif %}
+                                
+                                {% if risk.potential_loss %}
+                                <div class="text-sm text-gray-600">
+                                    <i class="fas fa-money-bill-wave ml-2"></i>
+                                    {{ "%.2f"|format(risk.potential_loss) }} ر.س
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
+                        
+                        <td class="py-4 px-6">
+                            <div class="space-y-2">
+                                {% if risk.target_resolution_date %}
+                                <div class="flex items-center {% if risk.target_resolution_date < now() and risk.status in ['open', 'in_progress'] %}text-red-600 font-bold{% endif %}">
+                                    <i class="fas fa-calendar-check ml-2"></i>
+                                    <span>{{ risk.target_resolution_date.strftime('%Y-%m-%d') }}</span>
+                                </div>
+                                
+                                {% if risk.target_resolution_date < now() and risk.status in ['open', 'in_progress'] %}
+                                <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                                    متأخرة
+                                </span>
+                                {% endif %}
+                                
+                                {% set days_left = (risk.target_resolution_date - now()).days %}
+                                {% if days_left >= 0 %}
+                                <div class="text-xs text-gray-600">
+                                    متبقي: {{ days_left }} يوم
+                                </div>
+                                {% endif %}
+                                {% else %}
+                                <span class="text-gray-400">غير محدد</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        
+                        <td class="py-4 px-6">
+                            <div class="flex flex-col space-y-2">
+                                <button onclick="viewRiskDetails({{ risk.id }})"
+                                        class="action-btn bg-blue-600 text-white hover:bg-blue-700">
+                                    <i class="fas fa-eye ml-1"></i> عرض
+                                </button>
+                                
+                                {% if user_role in ['admin', 'risk_manager'] or (user_role == 'branch_manager' and risk.branch_id == current_user.branch_id) %}
+                                <button onclick="editRisk({{ risk.id }})"
+                                        class="action-btn bg-green-600 text-white hover:bg-green-700">
+                                    <i class="fas fa-edit ml-1"></i> تعديل
+                                </button>
+                                {% endif %}
+                                
+                                {% if user_role in ['admin', 'risk_manager'] %}
+                                <button onclick="assessRisk({{ risk.id }})"
+                                        class="action-btn bg-purple-600 text-white hover:bg-purple-700">
+                                    <i class="fas fa-chart-line ml-1"></i> تقييم
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-gray-500">
+                            <i class="fas fa-inbox text-4xl mb-4 text-gray-300"></i>
+                            <p class="text-lg">لا توجد مخاطر مسجلة</p>
+                            <p class="text-sm mt-2">ابدأ بتسجيل أول خطر في النظام</p>
+                            <button onclick="showAddRiskModal()"
+                                    class="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                                <i class="fas fa-plus-circle ml-2"></i>
+                                تسجيل خطر جديد
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if risks|length > 0 %}
+        <div class="p-6 border-t">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div class="text-sm text-gray-600">
+                    عرض <span class="font-semibold">1-{{ risks|length }}</span> من <span class="font-semibold">{{ risks|length }}</span> خطر
+                </div>
+                
+                <div class="flex items-center space-x-2 space-x-reverse">
+                    <button class="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                    
+                    <button class="px-3 py-1 bg-blue-600 text-white rounded-lg">
+                        1
+                    </button>
+                    
+                    <button class="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        2
+                    </button>
+                    
+                    <button class="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        3
+                    </button>
+                    
+                    <button class="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                </div>
+                
+                <div class="text-sm text-gray-600">
+                    <select class="p-2 border border-gray-300 rounded-lg">
+                        <option value="10">10 لكل صفحة</option>
+                        <option value="25">25 لكل صفحة</option>
+                        <option value="50">50 لكل صفحة</option>
+                        <option value="100">100 لكل صفحة</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Risk Summary -->
+    {% if risks|length > 0 %}
+    <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Risk Distribution by Category -->
+        <div class="bg-white rounded-xl shadow p-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-6">توزيع المخاطر حسب التصنيف</h3>
+            <div class="space-y-4">
+                {% for category in risk_categories %}
+                {% set cat_risks = risks|selectattr('category_id', 'equalto', category.id)|list %}
+                {% if cat_risks|length > 0 %}
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 rounded-full ml-2" style="background-color: {{ category.color }}"></div>
+                            <span class="text-sm font-medium">{{ category.name }}</span>
+                        </div>
+                        <span class="text-sm text-gray-600">{{ cat_risks|length }} ({{ "%.0f"|format(cat_risks|length / risks|length * 100) }}%)</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="h-2 rounded-full" style="width: {{ cat_risks|length / risks|length * 100 }}%; background-color: {{ category.color }}"></div>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Risk Distribution by Status -->
+        <div class="bg-white rounded-xl shadow p-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-6">توزيع المخاطر حسب الحالة</h3>
+            <div class="space-y-4">
+                {% set status_groups = {
+                    'open': 'مفتوحة',
+                    'in_progress': 'قيد المعالجة',
+                    'mitigated': 'تمت المعالجة',
+                    'closed': 'مغلقة'
+                } %}
+                
+                {% for status_code, status_name in status_groups.items() %}
+                {% set status_risks = risks|selectattr('status', 'equalto', status_code)|list %}
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 rounded-full ml-2 
+                                {% if status_code == 'open' %}bg-yellow-500
+                                {% elif status_code == 'in_progress' %}bg-blue-500
+                                {% elif status_code == 'mitigated' %}bg-green-500
+                                {% else %}bg-gray-500{% endif %}"></div>
+                            <span class="text-sm font-medium">{{ status_name }}</span>
+                        </div>
+                        <span class="text-sm text-gray-600">{{ status_risks|length }}</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="h-2 rounded-full 
+                            {% if status_code == 'open' %}bg-yellow-500
+                            {% elif status_code == 'in_progress' %}bg-blue-500
+                            {% elif status_code == 'mitigated' %}bg-green-500
+                            {% else %}bg-gray-500{% endif %}" 
+                            style="width: {{ status_risks|length / risks|length * 100 if risks|length > 0 else 0 }}%">
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Risk Distribution by Priority -->
+        <div class="bg-white rounded-xl shadow p-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-6">توزيع المخاطر حسب الأولوية</h3>
+            <div class="space-y-4">
+                {% set priority_groups = {
+                    'critical': 'حرجة',
+                    'high': 'عالية',
+                    'medium': 'متوسطة',
+                    'low': 'منخفضة'
+                } %}
+                
+                {% for priority_code, priority_name in priority_groups.items() %}
+                {% set priority_risks = risks|selectattr('priority', 'equalto', priority_code)|list %}
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 rounded-full ml-2 
+                                {% if priority_code == 'critical' %}bg-red-500
+                                {% elif priority_code == 'high' %}bg-orange-500
+                                {% elif priority_code == 'medium' %}bg-yellow-500
+                                {% else %}bg-green-500{% endif %}"></div>
+                            <span class="text-sm font-medium">{{ priority_name }}</span>
+                        </div>
+                        <span class="text-sm text-gray-600">{{ priority_risks|length }}</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="h-2 rounded-full 
+                            {% if priority_code == 'critical' %}bg-red-500
+                            {% elif priority_code == 'high' %}bg-orange-500
+                            {% elif priority_code == 'medium' %}bg-yellow-500
+                            {% else %}bg-green-500{% endif %}" 
+                            style="width: {{ priority_risks|length / risks|length * 100 if risks|length > 0 else 0 }}%">
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Add Risk Modal (Reuse from dashboard) -->
+<div id="add-risk-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl animate__animated animate__zoomIn max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800">تسجيل خطر جديد</h3>
+                <button onclick="closeAddRiskModal()" 
+                        class="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <form id="add-risk-form">
+                <!-- Same form content as in dashboard -->
+                <div class="text-center py-8">
+                    <div class="loader mx-auto"></div>
+                    <p class="mt-4 text-gray-600">جاري تحميل نموذج التسجيل...</p>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Advanced Filters Modal -->
+<div id="advanced-filters-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl animate__animated animate__zoomIn">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800">فلتر متقدم</h3>
+                <button onclick="closeAdvancedFilters()" 
+                        class="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-gray-700 mb-2 font-medium">نطاق درجات المخاطرة</label>
+                    <div class="flex items-center space-x-3 space-x-reverse">
+                        <input type="number" min="0" max="25" placeholder="من"
+                               class="w-full p-3 border border-gray-300 rounded-lg">
+                        <span class="text-gray-500">إلى</span>
+                        <input type="number" min="0" max="25" placeholder="إلى"
+                               class="w-full p-3 border border-gray-300 rounded-lg">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 mb-2 font-medium">التأثير</label>
+                    <select class="w-full p-3 border border-gray-300 rounded-lg">
+                        <option value="">جميع المستويات</option>
+                        <option value="1">ضعيف (1)</option>
+                        <option value="2">محدود (2)</option>
+                        <option value="3">متوسط (3)</option>
+                        <option value="4">كبير (4)</option>
+                        <option value="5">كارثي (5)</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 mb-2 font-medium">الاحتمالية</label>
+                    <select class="w-full p-3 border border-gray-300 rounded-lg">
+                        <option value="">جميع المستويات</option>
+                        <option value="1">نادر (1)</option>
+                        <option value="2">منخفض (2)</option>
+                        <option value="3">متوسط (3)</option>
+                        <option value="4">مرتفع (4)</option>
+                        <option value="5">كارثي (5)</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 mb-2 font-medium">نطاق الخسارة المالية</label>
+                    <div class="flex items-center space-x-3 space-x-reverse">
+                        <input type="number" min="0" placeholder="من"
+                               class="w-full p-3 border border-gray-300 rounded-lg">
+                        <span class="text-gray-500">إلى</span>
+                        <input type="number" min="0" placeholder="إلى"
+                               class="w-full p-3 border border-gray-300 rounded-lg">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 mb-2 font-medium">نطاق التواريخ</label>
+                    <div class="space-y-2">
+                        <input type="date" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="من تاريخ">
+                        <input type="date" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="إلى تاريخ">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-gray-700 mb-2 font-medium">مالك الخطر</label>
+                    <select class="w-full p-3 border border-gray-300 rounded-lg">
+                        <option value="">جميع المالكين</option>
+                        {% for user in users %}
+                        <option value="{{ user.id }}">{{ user.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-3 space-x-reverse mt-6">
+                <button onclick="closeAdvancedFilters()"
+                        class="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium">
+                    إلغاء
+                </button>
+                <button onclick="applyAdvancedFilters()"
+                        class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
+                    تطبيق الفلتر
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initialize risk register
+    let allRisks = {{ risks|tojson|safe }};
+    let currentFilter = 'all';
+    
+    // Filter risks
+    function filterRisks(filterType) {
+        currentFilter = filterType;
+        
+        // Update active filter button
+        document.querySelectorAll('.filter-pill').forEach(btn => {
+            btn.classList.remove('bg-blue-600', 'text-white');
+            btn.classList.add('bg-gray-100', 'text-gray-800', 'hover:bg-gray-200');
+        });
+        
+        event.target.classList.remove('bg-gray-100', 'text-gray-800', 'hover:bg-gray-200');
+        event.target.classList.add('bg-blue-600', 'text-white');
+        
+        // Filter risks
+        let filteredRisks = allRisks;
+        
+        switch(filterType) {
+            case 'open':
+                filteredRisks = allRisks.filter(r => r.status === 'open');
+                break;
+            case 'in_progress':
+                filteredRisks = allRisks.filter(r => r.status === 'in_progress');
+                break;
+            case 'critical':
+                filteredRisks = allRisks.filter(r => r.priority === 'critical');
+                break;
+            case 'high':
+                filteredRisks = allRisks.filter(r => r.priority === 'high');
+                break;
+            case 'overdue':
+                filteredRisks = allRisks.filter(r => {
+                    if (!r.target_resolution_date) return false;
+                    const targetDate = new Date(r.target_resolution_date);
+                    const today = new Date();
+                    return targetDate < today && ['open', 'in_progress'].includes(r.status);
+                });
+                break;
+        }
+        
+        renderRisks(filteredRisks);
+    }
+    
+    // Filter by category
+    function filterByCategory(categoryId) {
+        const filteredRisks = allRisks.filter(r => r.category_id === categoryId);
+        renderRisks(filteredRisks);
+    }
+    
+    // Search risks
+    document.getElementById('search-risks')?.addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        const filteredRisks = allRisks.filter(risk => 
+            risk.title.toLowerCase().includes(searchTerm) ||
+            risk.description.toLowerCase().includes(searchTerm) ||
+            risk.category.name.toLowerCase().includes(searchTerm) ||
+            risk.branch.name.toLowerCase().includes(searchTerm)
+        );
+        renderRisks(filteredRisks);
+    });
+    
+    // Sort risks
+    document.getElementById('sort-risks')?.addEventListener('change', function(e) {
+        let sortedRisks = [...allRisks];
+        
+        switch(e.target.value) {
+            case 'date_desc':
+                sortedRisks.sort((a, b) => new Date(b.identified_date) - new Date(a.identified_date));
+                break;
+            case 'date_asc':
+                sortedRisks.sort((a, b) => new Date(a.identified_date) - new Date(b.identified_date));
+                break;
+            case 'score_desc':
+                sortedRisks.sort((a, b) => b.risk_score - a.risk_score);
+                break;
+            case 'score_asc':
+                sortedRisks.sort((a, b) => a.risk_score - b.risk_score);
+                break;
+            case 'priority':
+                const priorityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+                sortedRisks.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
+                break;
+        }
+        
+        renderRisks(sortedRisks);
+    });
+    
+    // Render risks table
+    function renderRisks(risks) {
+        const tbody = document.getElementById('risks-table-body');
+        if (!tbody) return;
+        
+        if (risks.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="py-12 text-center text-gray-500">
+                        <i class="fas fa-search text-4xl mb-4 text-gray-300"></i>
+                        <p class="text-lg">لا توجد مخاطر تطابق معايير البحث</p>
+                        <button onclick="clearFilters()"
+                                class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                            مسح الفلاتر
+                        </button>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        let html = '';
+        risks.forEach(risk => {
+            const statusText = risk.status === 'open' ? 'مفتوحة' :
+                             risk.status === 'in_progress' ? 'قيد المعالجة' :
+                             risk.status === 'mitigated' ? 'تمت المعالجة' : 'مغلقة';
+            
+            const priorityText = risk.priority === 'critical' ? 'حرجة' :
+                               risk.priority === 'high' ? 'عالية' :
+                               risk.priority === 'medium' ? 'متوسطة' : 'منخفضة';
+            
+            html += `
+                <tr class="border-b hover:bg-gray-50 transition-colors risk-card">
+                    <td class="py-4 px-6">
+                        <div class="flex items-start">
+                            <div class="ml-4">
+                                <div class="flex items-center mb-2">
+                                    <h4 class="font-bold text-gray-800">${risk.title}</h4>
+                                    ${risk.basel_category ? `
+                                    <span class="mr-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                                        Basel III
+                                    </span>
+                                    ` : ''}
+                                </div>
+                                <p class="text-sm text-gray-600 mb-2">${risk.description?.substring(0, 100) || ''}...</p>
+                                <div class="flex items-center text-xs text-gray-500">
+                                    <i class="fas fa-user ml-2"></i>
+                                    <span>${risk.owner?.username || 'غير محدد'}</span>
+                                    <i class="fas fa-calendar-alt mr-4 ml-4"></i>
+                                    <span>${new Date(risk.identified_date).toLocaleDateString('ar-SA')}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    
+                    <td class="py-4 px-6">
+                        <div class="flex flex-col space-y-2">
+                            <span class="category-tag category-${risk.category.code.toLowerCase()} inline-block"
+                                  style="background-color: ${risk.category.color}20; color: ${risk.category.color}">
+                                ${risk.category.name}
+                            </span>
+                            ${risk.basel_category ? `
+                            <span class="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
+                                ${risk.basel_category}
+                            </span>
+                            ` : ''}
+                        </div>
+                    </td>
+                    
+                    <td class="py-4 px-6">
+                        <div class="flex items-center">
+                            <i class="fas fa-university text-gray-400 ml-2"></i>
+                            <div>
+                                <p class="font-medium">${risk.branch.name}</p>
+                                <p class="text-sm text-gray-600">${risk.branch.code}</p>
+                            </div>
+                        </div>
+                    </td>
+                    
+                    <td class="py-4 px-6">
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-600">الدرجة:</span>
+                                <span class="font-bold text-lg 
+                                    ${risk.risk_score >= 20 ? 'score-critical' :
+                                      risk.risk_score >= 10 ? 'score-high' :
+                                      risk.risk_score >= 5 ? 'score-medium' : 'score-low'}">
+                                    ${risk.risk_score}
+                                </span>
+                            </div>
+                            
+                            <div class="progress-bar">
+                                <div class="progress-fill 
+                                    ${risk.risk_score >= 20 ? 'bg-red-500' :
+                                      risk.risk_score >= 10 ? 'bg-orange-500' :
+                                      risk.risk_score >= 5 ? 'bg-yellow-500' : 'bg-green-500'}" 
+                                    style="width: ${Math.min((risk.risk_score / 25 * 100), 100)}%">
+                                </div>
+                            </div>
+                            
+                            <div class="flex justify-between text-xs text-gray-500">
+                                <span>تأثير: ${risk.impact}/5</span>
+                                <span>احتمالية: ${risk.likelihood}/5</span>
+                            </div>
+                            
+                            <span class="priority-badge priority-${risk.priority}">
+                                ${priorityText}
+                            </span>
+                        </div>
+                    </td>
+                    
+                    <td class="py-4 px-6">
+                        <div class="flex flex-col space-y-2">
+                            <span class="status-badge status-${risk.status}">
+                                ${statusText}
+                            </span>
+                            
+                            ${risk.assigned_to ? `
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-user-check ml-2"></i>
+                                <span>${risk.assigned_to.username}</span>
+                            </div>
+                            ` : ''}
+                            
+                            ${risk.potential_loss ? `
+                            <div class="text-sm text-gray-600">
+                                <i class="fas fa-money-bill-wave ml-2"></i>
+                                ${risk.potential_loss.toFixed(2)} ر.س
+                            </div>
+                            ` : ''}
+                        </div>
+                    </td>
+                    
+                    <td class="py-4 px-6">
+                        <div class="space-y-2">
+                            ${risk.target_resolution_date ? `
+                            <div class="flex items-center ${new Date(risk.target_resolution_date) < new Date() && ['open', 'in_progress'].includes(risk.status) ? 'text-red-600 font-bold' : ''}">
+                                <i class="fas fa-calendar-check ml-2"></i>
+                                <span>${new Date(risk.target_resolution_date).toLocaleDateString('ar-SA')}</span>
+                            </div>
+                            
+                            ${new Date(risk.target_resolution_date) < new Date() && ['open', 'in_progress'].includes(risk.status) ? `
+                            <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                                متأخرة
+                            </span>
+                            ` : ''}
+                            
+                            ${(() => {
+                                const daysLeft = Math.ceil((new Date(risk.target_resolution_date) - new Date()) / (1000 * 60 * 60 * 24));
+                                if (daysLeft >= 0) {
+                                    return `<div class="text-xs text-gray-600">متبقي: ${daysLeft} يوم</div>`;
+                                }
+                                return '';
+                            })()}
+                            ` : `
+                            <span class="text-gray-400">غير محدد</span>
+                            `}
+                        </div>
+                    </td>
+                    
+                    <td class="py-4 px-6">
+                        <div class="flex flex-col space-y-2">
+                            <button onclick="viewRiskDetails(${risk.id})"
+                                    class="action-btn bg-blue-600 text-white hover:bg-blue-700">
+                                <i class="fas fa-eye ml-1"></i> عرض
+                            </button>
+                            
+                            ${['admin', 'risk_manager'].includes('{{ user_role }}') || ('{{ user_role }}' === 'branch_manager' && risk.branch_id === {{ current_user.branch_id|default(0) }}) ? `
+                            <button onclick="editRisk(${risk.id})"
+                                    class="action-btn bg-green-600 text-white hover:bg-green-700">
+                                <i class="fas fa-edit ml-1"></i> تعديل
+                            </button>
+                            ` : ''}
+                            
+                            ${['admin', 'risk_manager'].includes('{{ user_role }}') ? `
+                            <button onclick="assessRisk(${risk.id})"
+                                    class="action-btn bg-purple-600 text-white hover:bg-purple-700">
+                                <i class="fas fa-chart-line ml-1"></i> تقييم
+                            </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        tbody.innerHTML = html;
+    }
+    
+    // View risk details
+    function viewRiskDetails(riskId) {
+        window.location.href = `/risk/${riskId}`;
+    }
+    
+    // Edit risk
+    function editRisk(riskId) {
+        alert(`تعديل الخطر ${riskId} - هذه الخاصية قيد التطوير`);
+    }
+    
+    // Assess risk
+    function assessRisk(riskId) {
+        window.location.href = `/risk/${riskId}/assess`;
+    }
+    
+    // Export risks
+    function exportRisks() {
+        const btn = event.target.closest('button');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i>';
+        
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            
+            // Create CSV data
+            let csv = 'عنوان الخطر,التصنيف,الفرع,درجة المخاطرة,الحالة,الأولوية,التأثير,الاحتمالية,مالك الخطر,تاريخ التسجيل\n';
+            
+            allRisks.forEach(risk => {
+                csv += `"${risk.title}","${risk.category.name}","${risk.branch.name}",${risk.risk_score},${risk.status},${risk.priority},${risk.impact},${risk.likelihood},"${risk.owner?.username || ''}","${new Date(risk.identified_date).toLocaleDateString('ar-SA')}"\n`;
+            });
+            
+            // Create download link
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `مخاطر_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            
+            showToast('تم تصدير البيانات بنجاح');
+        }, 1000);
+    }
+    
+    // Bulk update
+    function bulkUpdateRisks() {
+        alert('تحديث جماعي للمخاطر - هذه الخاصية قيد التطوير');
+    }
+    
+    // Advanced filters
+    function showAdvancedFilters() {
+        document.getElementById('advanced-filters-modal').classList.remove('hidden');
+    }
+    
+    function closeAdvancedFilters() {
+        document.getElementById('advanced-filters-modal').classList.add('hidden');
+    }
+    
+    function applyAdvancedFilters() {
+        // Apply filters logic
+        closeAdvancedFilters();
+        showToast('تم تطبيق الفلتر المتقدم');
+    }
+    
+    // Clear all filters
+    function clearFilters() {
+        document.getElementById('search-risks').value = '';
+        document.getElementById('sort-risks').value = 'date_desc';
+        
+        // Reset filter buttons
+        document.querySelectorAll('.filter-pill').forEach(btn => {
+            btn.classList.remove('bg-blue-600', 'text-white');
+            btn.classList.add('bg-gray-100', 'text-gray-800', 'hover:bg-gray-200');
+        });
+        
+        // Reset to first button
+        const firstBtn = document.querySelector('.filter-pill');
+        if (firstBtn) {
+            firstBtn.classList.remove('bg-gray-100', 'text-gray-800', 'hover:bg-gray-200');
+            firstBtn.classList.add('bg-blue-600', 'text-white');
+        }
+        
+        renderRisks(allRisks);
+        showToast('تم مسح جميع الفلاتر');
+    }
+    
+    // Add risk modal functions
+    function showAddRiskModal() {
+        document.getElementById('add-risk-modal').classList.remove('hidden');
+    }
+    
+    function closeAddRiskModal() {
+        document.getElementById('add-risk-modal').classList.add('hidden');
+    }
+    
+    // Show toast notification
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'fixed bottom-4 left-4 z-50 p-4 bg-gray-800 text-white rounded-lg shadow-xl animate__animated animate__fadeInUp';
+        toast.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-check-circle text-green-400 ml-3"></i>
+                <span>${message}</span>
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.classList.add('animate__fadeOutDown');
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.remove();
+                }
+            }, 500);
+        }, 3000);
+    }
+    
+    // Close modals when clicking outside
+    document.getElementById('add-risk-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeAddRiskModal();
+        }
+    });
+    
+    document.getElementById('advanced-filters-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeAdvancedFilters();
+        }
+    });
+</script>
+{% endblock %}
